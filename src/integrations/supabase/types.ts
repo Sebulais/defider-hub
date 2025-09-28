@@ -14,7 +14,178 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      horarios_gym: {
+        Row: {
+          bloque: string
+          created_at: string
+          cupos_ocupados: number
+          cupos_totales: number
+          dia: string
+          hora_fin: string
+          hora_inicio: string
+          id: string
+        }
+        Insert: {
+          bloque: string
+          created_at?: string
+          cupos_ocupados?: number
+          cupos_totales?: number
+          dia: string
+          hora_fin: string
+          hora_inicio: string
+          id?: string
+        }
+        Update: {
+          bloque?: string
+          created_at?: string
+          cupos_ocupados?: number
+          cupos_totales?: number
+          dia?: string
+          hora_fin?: string
+          hora_inicio?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      inscripciones_talleres: {
+        Row: {
+          created_at: string
+          id: string
+          taller_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          taller_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          taller_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inscripciones_talleres_taller_id_fkey"
+            columns: ["taller_id"]
+            isOneToOne: false
+            referencedRelation: "talleres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservas_gym: {
+        Row: {
+          created_at: string
+          horario_gym_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          horario_gym_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          horario_gym_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservas_gym_horario_gym_id_fkey"
+            columns: ["horario_gym_id"]
+            isOneToOne: false
+            referencedRelation: "horarios_gym"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talleres: {
+        Row: {
+          available: boolean | null
+          capacity: number
+          category: string
+          color: string | null
+          created_at: string
+          description: string | null
+          duration: string
+          enrolled: number
+          id: string
+          instructor: string
+          level: string
+          location: string
+          name: string
+          price: string
+          rating: number | null
+          schedule: string
+        }
+        Insert: {
+          available?: boolean | null
+          capacity?: number
+          category: string
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          duration: string
+          enrolled?: number
+          id?: string
+          instructor: string
+          level: string
+          location: string
+          name: string
+          price: string
+          rating?: number | null
+          schedule: string
+        }
+        Update: {
+          available?: boolean | null
+          capacity?: number
+          category?: string
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          duration?: string
+          enrolled?: number
+          id?: string
+          instructor?: string
+          level?: string
+          location?: string
+          name?: string
+          price?: string
+          rating?: number | null
+          schedule?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          nombre: string
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          nombre: string
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          nombre?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
