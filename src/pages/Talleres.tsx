@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,218 +15,103 @@ import {
   Filter,
   Heart
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const Talleres = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("Todos");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [talleres, setTalleres] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inscribing, setInscribing] = useState<string | null>(null);
 
-  const talleres = [
-    {
-      id: 1,
-      name: "Básquetbol Competitivo",
-      instructor: "Prof. Juan Carlos Méndez",
-      schedule: "Lun-Mié-Vie 8:00 AM",
-      location: "Cancha Central - Gimnasio Principal",
-      capacity: 24,
-      enrolled: 20,
-      level: "Intermedio",
-      category: "Deportes de Equipo",
-      rating: 4.8,
-      price: "$25.000/mes",
-      duration: "90 min",
-      color: "bg-accent",
-      available: true,
-      description: "Mejora tu técnica y táctica en básquetbol con entrenamientos intensivos."
-    },
-    {
-      id: 2,
-      name: "Voleibol Femenino",
-      instructor: "Prof. Sandra Ramírez",
-      schedule: "Mar-Jue 6:30 PM",
-      location: "Cancha de Voleibol - Gimnasio 2",
-      capacity: 18,
-      enrolled: 16,
-      level: "Principiante",
-      category: "Deportes de Equipo",
-      rating: 4.9,
-      price: "$20.000/mes",
-      duration: "75 min",
-      color: "bg-secondary",
-      available: true,
-      description: "Aprende los fundamentos del voleibol en un ambiente inclusivo y divertido."
-    },
-    {
-      id: 3,
-      name: "Natación Libre",
-      instructor: "Prof. Ana López",
-      schedule: "Sáb 9:00 AM",
-      location: "Piscina Olímpica",
-      capacity: 25,
-      enrolled: 25,
-      level: "Todos los niveles",
-      category: "Deportes Acuáticos",
-      rating: 4.7,
-      price: "$30.000/mes",
-      duration: "60 min",
-      color: "bg-primary",
-      available: false,
-      description: "Sesiones de natación libre con supervisión profesional y técnicas de mejora."
-    },
-    {
-      id: 4,
-      name: "CrossFit Intensivo",
-      instructor: "Prof. Carlos Ruiz",
-      schedule: "Mar-Jue-Sáb 6:00 PM",
-      location: "Área Funcional - Gimnasio 2",
-      capacity: 15,
-      enrolled: 14,
-      level: "Avanzado",
-      category: "Fitness",
-      rating: 4.9,
-      price: "$40.000/mes",
-      duration: "60 min",
-      color: "bg-accent",
-      available: true,
-      description: "Entrenamiento funcional de alta intensidad para mejorar fuerza y resistencia."
-    },
-    {
-      id: 5,
-      name: "Yoga Integral",
-      instructor: "Prof. María González",
-      schedule: "Lun-Mié-Vie 7:00 AM",
-      location: "Salón A - Gimnasio Principal",
-      capacity: 20,
-      enrolled: 18,
-      level: "Principiante",
-      category: "Bienestar",
-      rating: 4.8,
-      price: "$25.000/mes",
-      duration: "75 min",
-      color: "bg-secondary",
-      available: true,
-      description: "Práctica integral de yoga para mejorar flexibilidad, fuerza y bienestar mental."
-    },
-    {
-      id: 6,
-      name: "Fútbol Recreativo",
-      instructor: "Prof. Diego Morales",
-      schedule: "Dom 4:00 PM",
-      location: "Cancha Principal",
-      capacity: 22,
-      enrolled: 19,
-      level: "Intermedio",
-      category: "Deportes de Equipo",
-      rating: 4.6,
-      price: "$22.000/mes",
-      duration: "90 min",
-      color: "bg-primary",
-      available: true,
-      description: "Partidos recreativos de fútbol con enfoque en técnica y trabajo en equipo."
-    },
-    {
-      id: 7,
-      name: "Tenis de Mesa",
-      instructor: "Prof. Luis Chen",
-      schedule: "Mié-Vie 5:00 PM",
-      location: "Salón de Tenis de Mesa",
-      capacity: 16,
-      enrolled: 12,
-      level: "Principiante",
-      category: "Deportes de Raqueta",
-      rating: 4.5,
-      price: "$18.000/mes",
-      duration: "60 min",
-      color: "bg-secondary",
-      available: true,
-      description: "Desarrolla precisión y reflejos en el deporte de tenis de mesa."
-    },
-    {
-      id: 8,
-      name: "Atletismo y Pista",
-      instructor: "Prof. Carmen Torres",
-      schedule: "Lun-Jue 7:30 AM",
-      location: "Pista de Atletismo",
-      capacity: 30,
-      enrolled: 22,
-      level: "Todos los niveles",
-      category: "Atletismo",
-      rating: 4.7,
-      price: "$25.000/mes",
-      duration: "90 min",
-      color: "bg-accent",
-      available: true,
-      description: "Entrenamiento completo de atletismo: velocidad, resistencia y técnica."
-    },
-    {
-      id: 9,
-      name: "Boxeo Deportivo",
-      instructor: "Prof. Roberto Silva",
-      schedule: "Mar-Jue-Sáb 7:00 PM",
-      location: "Sala de Boxeo",
-      capacity: 12,
-      enrolled: 10,
-      level: "Intermedio",
-      category: "Deportes de Combate",
-      rating: 4.8,
-      price: "$35.000/mes",
-      duration: "75 min",
-      color: "bg-primary",
-      available: true,
-      description: "Técnicas de boxeo deportivo con enfoque en acondicionamiento físico."
-    },
-    {
-      id: 10,
-      name: "Aeróbicos Acuáticos",
-      instructor: "Prof. Patricia Vega",
-      schedule: "Mar-Jue 8:00 AM",
-      location: "Piscina Semiolímpica",
-      capacity: 20,
-      enrolled: 17,
-      level: "Principiante",
-      category: "Deportes Acuáticos",
-      rating: 4.6,
-      price: "$28.000/mes",
-      duration: "60 min",
-      color: "bg-secondary",
-      available: true,
-      description: "Ejercicios aeróbicos en el agua para mejorar la condición física."
-    },
-    {
-      id: 11,
-      name: "Escalada Deportiva",
-      instructor: "Prof. Andrés Rojas",
-      schedule: "Sáb-Dom 10:00 AM",
-      location: "Muro de Escalada",
-      capacity: 10,
-      enrolled: 8,
-      level: "Intermedio",
-      category: "Deportes Extremos",
-      rating: 4.9,
-      price: "$45.000/mes",
-      duration: "120 min",
-      color: "bg-accent",
-      available: true,
-      description: "Aprende técnicas de escalada deportiva en muro artificial con seguridad profesional."
-    },
-    {
-      id: 12,
-      name: "Spinning Avanzado",
-      instructor: "Prof. Mónica Herrera",
-      schedule: "Lun-Mié-Vie 6:00 PM",
-      location: "Sala de Spinning",
-      capacity: 25,
-      enrolled: 23,
-      level: "Avanzado",
-      category: "Fitness",
-      rating: 4.7,
-      price: "$30.000/mes",
-      duration: "50 min",
-      color: "bg-primary",
-      available: true,
-      description: "Clases intensivas de spinning con música motivacional y rutinas desafiantes."
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  useEffect(() => {
+    fetchTalleres();
+  }, []);
+
+  const fetchTalleres = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('talleres')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setTalleres(data || []);
+    } catch (error) {
+      console.error('Error fetching talleres:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los talleres",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleInscription = async (tallerId: string) => {
+    if (!user) return;
+
+    setInscribing(tallerId);
+    try {
+      const { error } = await supabase
+        .from('inscripciones_talleres')
+        .insert([
+          {
+            user_id: user.id,
+            taller_id: tallerId
+          }
+        ]);
+
+      if (error) {
+        if (error.code === '23505') {
+          toast({
+            title: "Ya inscrito",
+            description: "Ya estás inscrito en este taller",
+            variant: "destructive"
+          });
+        } else {
+          throw error;
+        }
+      } else {
+        toast({
+          title: "¡Inscrito!",
+          description: "Te has inscrito exitosamente al taller"
+        });
+        // Refresh talleres to get updated counts
+        fetchTalleres();
+      }
+    } catch (error) {
+      console.error('Error inscribing:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo completar la inscripción",
+        variant: "destructive"
+      });
+    } finally {
+      setInscribing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando talleres...</p>
+        </div>
+      </div>
+    );
+  }
 
   const categories = ["Todos", "Deportes de Equipo", "Fitness", "Bienestar", "Deportes Acuáticos", "Deportes de Raqueta", "Atletismo", "Deportes de Combate", "Deportes Extremos"];
   const levels = ["Todos", "Principiante", "Intermedio", "Avanzado", "Todos los niveles"];
@@ -410,9 +296,11 @@ const Talleres = () => {
                       variant={taller.available ? "sport" : "ghost"} 
                       size="sm" 
                       className="flex-1"
-                      disabled={!taller.available}
+                      disabled={!taller.available || inscribing === taller.id}
+                      onClick={() => handleInscription(taller.id)}
                     >
-                      {taller.available ? "Inscribirse" : "Lista de Espera"}
+                      {inscribing === taller.id ? "Inscribiendo..." : 
+                       taller.available ? "Inscribirse" : "Lista de Espera"}
                     </Button>
                     <Button variant="outline" size="sm">
                       <Heart className="w-4 h-4" />
