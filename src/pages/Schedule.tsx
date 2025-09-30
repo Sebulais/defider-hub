@@ -302,20 +302,20 @@ const Schedule = () => {
             <Button
               onClick={() => setEditMode(!editMode)}
               variant={editMode ? "secondary" : "default"}
-              className={'gap-2 ${!editmode ? '-bg-white text-primary hover:bg-white/90' : ''}'}
+              className={`gap-2 ${!editMode ? 'bg-white text-primary hover:bg-white/90' : ''}`}
             >
               {editMode ? (
-                <>
-                  <Save className="h-4 w-4" />
-                  Guardar Cambios
-                </>
-              ) : (
-                <>
-                  <Edit2 className="h-4 w-4" />
-                  Editar Horario
-                </>
-              )}
-            </Button>
+              <>
+                <Save className="h-4 w-4" />
+                Guardar Cambios
+              </>
+            ) : (
+              <>
+                <Edit2 className="h-4 w-4" />
+                Editar Horario
+              </>
+            )}
+          </Button>
           </div>
         </div>
       </div>
