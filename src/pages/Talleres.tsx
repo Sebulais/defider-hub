@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Users, 
+  Clock, 
   MapPin, 
-  Clock,
   Star,
   Calendar,
   User,
@@ -270,10 +270,6 @@ const Talleres = () => {
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4" />
                           <span>{taller.location}</span>
-                        </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>70 min</span>
                         </div>
                       </div>
 
