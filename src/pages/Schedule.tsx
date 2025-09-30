@@ -301,8 +301,8 @@ const Schedule = () => {
             </div>
             <Button
               onClick={() => setEditMode(!editMode)}
-              variant={editMode ? "secondary" : "outline"}
-              className="gap-2"
+              variant={editMode ? "secondary" : "default"}
+              className={'gap-2 ${!editmode ? '-bg-white text-primary hover:bg-white/90' : ''}'}
             >
               {editMode ? (
                 <>
