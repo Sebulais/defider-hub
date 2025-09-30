@@ -1,15 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowRight, Calendar, Trophy, Users, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import heroImage from "@/assets/hero-sports.jpg";
 
 const Hero = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   const stats = [
     { icon: Users, value: "15+", label: "Talleres Activos" },
     { icon: Trophy, value: "3", label: "Gimnasios Disponibles" },
-    { icon: Calendar, value: "24/7", label: "Horarios Flexibles" },
-    { icon: Clock, value: "45min", label: "Promedio Clase" },
+    { icon: Calendar, value: "Lunes a Viernes", label: "Horarios Flexibles" },
+    { icon: Clock, value: "70 min", label: "Duración de cada Taller" },
   ];
+
+  const handleNavigate = (path: string) => {
+    if (user) {
+      navigate(path);
+    } else {
+      navigate('/auth');
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-background">
@@ -40,11 +53,21 @@ const Hero = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-slide-up">
-            <Button variant="hero" size="lg" className="text-lg px-8 py-4">
+            <Button 
+              variant="hero" 
+              size="lg" 
+              className="text-lg px-8 py-4"
+              onClick={() => handleNavigate('/talleres')}
+            >
               Explorar Talleres
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-4">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="text-lg px-8 py-4"
+              onClick={() => handleNavigate('/gym')}
+            >
               Reservar Gimnasio
             </Button>
           </div>
