@@ -112,19 +112,24 @@ const Talleres = () => {
   // Helper para convertir formato de horarios a tiempo legible
   const formatSchedule = (schedule: string) => {
     const bloqueMap: { [key: string]: string } = {
-      "1": "08:15-08:50", "2": "08:50-09:25", "3": "09:40-10:15", "4": "10:15-10:50",
-      "5": "11:05-11:40", "6": "11:40-12:15", "7": "12:30-13:05", "8": "13:05-13:40",
-      "9": "13:55-14:30", "10": "14:30-15:05", "11": "15:20-15:55", "12": "15:55-16:30",
-      "13": "16:45-17:20", "14": "17:20-17:55"
+      "1": "08:15", "2": "09:25",
+      "3": "09:40", "4": "10:50",
+      "5": "11:05", "6": "12:15",
+      "7": "12:30", "8": "13:40",
+      "9": "14:40", "10": "15:50",
+      "11": "16:05", "12": "17:15",
+      "13": "17:30", "14": "18:40"
     };
-    
+  
     const bloqueMatch = schedule.match(/Bloque (\d+)-(\d+)/);
     if (bloqueMatch) {
       const inicio = bloqueMatch[1];
       const fin = bloqueMatch[2];
-      const horaInicio = bloqueMap[inicio]?.split('-')[0];
-      const horaFin = bloqueMap[fin]?.split('-')[1];
-      return `${schedule} (${horaInicio}-${horaFin})`;
+      const horaInicio = bloqueMap[inicio];
+      const horaFin = bloqueMap[fin];
+      if (horaInicio && horaFin) {
+        return `${schedule} (${horaInicio}-${horaFin})`;
+      }
     }
     return schedule;
   };
@@ -265,10 +270,6 @@ const Talleres = () => {
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4" />
                           <span>{taller.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>{taller.duration}</span>
                         </div>
                       </div>
 
