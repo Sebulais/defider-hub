@@ -10,8 +10,13 @@ import {
   MapPin,
   Star
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const ServicesOverview = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   const services = [
     {
       icon: Users,
@@ -27,7 +32,7 @@ const ServicesOverview = () => {
       description: "Reserva espacios en nuestros 3 gimnasios equipados con tecnología de última generación.",
       features: ["Reservas en línea", "Equipamiento completo", "Horarios extendidos"],
       color: "gradient-secondary",
-      href: "/gimnasio"
+      href: "/gym"
     },
     {
       icon: Calendar,
@@ -35,7 +40,7 @@ const ServicesOverview = () => {
       description: "Visualiza y gestiona todos tus talleres inscritos y reservas desde un solo lugar.",
       features: ["Vista calendario", "Recordatorios", "Sincronización"],
       color: "gradient-accent",
-      href: "/horario"
+      href: "/schedule"
     },
     {
       icon: Bell,
@@ -43,9 +48,17 @@ const ServicesOverview = () => {
       description: "Mantente conectado con tus instructores y recibe actualizaciones importantes.",
       features: ["Mensajes directos", "Alertas de horarios", "Comunicación grupal"],
       color: "gradient-energy",
-      href: "/notificaciones"
+      href: "/schedule"
     }
   ];
+
+  const handleNavigate = (path: string) => {
+    if (user) {
+      navigate(path);
+    } else {
+      navigate('/auth');
+    }
+  };
 
   return (
     <section className="py-20 bg-muted/30">
@@ -91,7 +104,11 @@ const ServicesOverview = () => {
                     ))}
                   </ul>
                   
-                  <Button variant="ghost" className="group">
+                  <Button 
+                    variant="ghost" 
+                    className="group"
+                    onClick={() => handleNavigate(service.href)}
+                  >
                     Explorar
                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
@@ -118,7 +135,11 @@ const ServicesOverview = () => {
                 <p className="text-sm text-muted-foreground">Contacta a nuestro equipo</p>
               </div>
             </div>
-            <Button variant="energy" size="lg">
+            <Button 
+              variant="energy" 
+              size="lg"
+              onClick={() => handleNavigate('/talleres')}
+            >
               Comenzar Ahora
             </Button>
           </div>
