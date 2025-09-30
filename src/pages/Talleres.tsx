@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Users, 
   MapPin, 
+  Clock,
   Star,
   Calendar,
   User,
@@ -270,6 +271,24 @@ const Talleres = () => {
                           <MapPin className="h-4 w-4" />
                           <span>{taller.location}</span>
                         </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>{(() => {
+                              const bloqueMatch = taller.schedule.match(/Bloque (\d+)-(\d+)/);
+                              if (bloqueMatch) {
+                                const bloqueMap: { [key: string]: string } = {
+                                  "1": "08:15", "2": "09:25", "3": "09:40", "4": "10:50",
+                                  "5": "11:05", "6": "12:15", "7": "12:30", "8": "13:40",
+                                  "9": "14:40", "10": "15:50", "11": "16:05", "12": "17:15",
+                                 "13": "17:30", "14": "18:40"
+                                };
+                                const horaInicio = bloqueMap[bloqueMatch[1]];
+                                const horaFin = bloqueMap[bloqueMatch[2]];
+                                return `${horaInicio}-${horaFin}`;
+                              }
+                              return "70 min";
+                            })()}</span>
+                          </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-3 border-t border-border">
