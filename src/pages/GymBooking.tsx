@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Clock, Users, Calendar, CheckCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Calendar, Clock, Users, AlertCircle } from 'lucide-react';
 
 interface HorarioGym {
   id: string;
@@ -19,21 +19,54 @@ interface HorarioGym {
 }
 
 const GymBooking = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
   const [horarios, setHorarios] = useState<HorarioGym[]>([]);
   const [loading, setLoading] = useState(true);
   const [reserving, setReserving] = useState<string | null>(null);
   const [userReservations, setUserReservations] = useState<Set<string>>(new Set());
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    
     fetchHorarios();
     fetchUserReservations();
-  }, [user]);
+
+    // Real-time subscription for gym schedules
+    const channel = supabase
+      .channel('gym-schedule-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'horarios_gym'
+        },
+        () => {
+          fetchHorarios();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'reservas_gym'
+        },
+        () => {
+          fetchHorarios();
+          fetchUserReservations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, navigate]);
 
   const fetchHorarios = async () => {
     try {
@@ -46,12 +79,8 @@ const GymBooking = () => {
       if (error) throw error;
       setHorarios(data || []);
     } catch (error) {
-      console.error('Error fetching horarios:', error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los horarios",
-        variant: "destructive"
-      });
+      console.error('Error fetching gym schedules:', error);
+      toast.error('Error al cargar horarios del gimnasio');
     } finally {
       setLoading(false);
     }
@@ -67,7 +96,7 @@ const GymBooking = () => {
         .eq('user_id', user.id);
 
       if (error) throw error;
-      
+
       const reservationIds = new Set(data?.map(r => r.horario_gym_id) || []);
       setUserReservations(reservationIds);
     } catch (error) {
@@ -76,45 +105,37 @@ const GymBooking = () => {
   };
 
   const handleReservation = async (horarioId: string) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Debes iniciar sesión para reservar');
+      navigate('/auth');
+      return;
+    }
 
     setReserving(horarioId);
+
     try {
       const { error } = await supabase
         .from('reservas_gym')
-        .insert([
-          {
-            user_id: user.id,
-            horario_gym_id: horarioId
-          }
-        ]);
+        .insert({
+          user_id: user.id,
+          horario_gym_id: horarioId,
+        });
 
       if (error) {
         if (error.code === '23505') {
-          toast({
-            title: "Ya reservado",
-            description: "Ya tienes una reserva en este horario",
-            variant: "destructive"
-          });
+          toast.error('Ya tienes una reserva para este horario');
         } else {
           throw error;
         }
-      } else {
-        toast({
-          title: "¡Reservado!",
-          description: "Has reservado exitosamente tu cupo en el gimnasio"
-        });
-        // Refresh data
-        fetchHorarios();
-        fetchUserReservations();
+        return;
       }
+
+      toast.success('¡Reserva realizada exitosamente!');
+      await fetchHorarios();
+      await fetchUserReservations();
     } catch (error) {
       console.error('Error making reservation:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo completar la reserva",
-        variant: "destructive"
-      });
+      toast.error('Error al realizar la reserva');
     } finally {
       setReserving(null);
     }
@@ -122,6 +143,8 @@ const GymBooking = () => {
 
   const handleCancelReservation = async (horarioId: string) => {
     if (!user) return;
+
+    setReserving(horarioId);
 
     try {
       const { error } = await supabase
@@ -132,36 +155,29 @@ const GymBooking = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Reserva cancelada",
-        description: "Has cancelado tu reserva exitosamente"
-      });
-      
-      // Refresh data
-      fetchHorarios();
-      fetchUserReservations();
+      toast.success('Reserva cancelada exitosamente');
+      await fetchHorarios();
+      await fetchUserReservations();
     } catch (error) {
       console.error('Error canceling reservation:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo cancelar la reserva",
-        variant: "destructive"
-      });
+      toast.error('Error al cancelar la reserva');
+    } finally {
+      setReserving(null);
     }
   };
 
-  const getCuposColor = (ocupados: number, totales: number) => {
-    const disponibles = totales - ocupados;
-    if (disponibles > 10) return "text-secondary";
-    if (disponibles >= 5) return "text-accent";
-    return "text-destructive";
+  const getCuposColor = (disponibles: number, totales: number) => {
+    const porcentaje = (disponibles / totales) * 100;
+    if (porcentaje > 50) return 'text-secondary';
+    if (porcentaje > 25) return 'text-accent';
+    return 'text-destructive';
   };
 
-  const getCuposBadgeVariant = (ocupados: number, totales: number) => {
-    const disponibles = totales - ocupados;
-    if (disponibles > 10) return "secondary";
-    if (disponibles >= 5) return "outline";
-    return "destructive";
+  const getCuposBadgeVariant = (disponibles: number, totales: number): "default" | "secondary" | "destructive" => {
+    const porcentaje = (disponibles / totales) * 100;
+    if (porcentaje > 50) return 'secondary';
+    if (porcentaje > 25) return 'default';
+    return 'destructive';
   };
 
   const groupedHorarios = horarios.reduce((acc, horario) => {
@@ -172,11 +188,11 @@ const GymBooking = () => {
     return acc;
   }, {} as Record<string, HorarioGym[]>);
 
-  const diasOrden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+  const diasOrden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Cargando horarios...</p>
@@ -188,115 +204,108 @@ const GymBooking = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="gradient-hero text-white py-20">
+      <div className="gradient-primary text-primary-foreground py-16">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-5xl md:text-6xl font-bold mb-4">
-              Reserva de Gimnasio
-            </h1>
-            <p className="text-xl max-w-3xl mx-auto opacity-90">
-              Reserva tu cupo en el gimnasio universitario. Horarios por bloques académicos con 20 cupos disponibles por sesión.
-            </p>
-          </div>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">Reserva de Gimnasio</h1>
+          <p className="text-lg opacity-90">Reserva tu espacio en el gimnasio y entrena cuando quieras</p>
         </div>
-      </section>
+      </div>
 
-      {/* Schedule Grid */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {diasOrden.map((dia) => (
-              <div key={dia} className="space-y-4">
-                <h2 className="text-2xl font-bold text-center text-foreground bg-muted/30 rounded-lg py-3">
+      <div className="container mx-auto px-4 py-12">
+        {/* Schedules by Day */}
+        <div className="space-y-8">
+          {diasOrden.map((dia) => {
+            const horariosDelDia = groupedHorarios[dia];
+            if (!horariosDelDia || horariosDelDia.length === 0) return null;
+
+            return (
+              <div key={dia}>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <Calendar className="h-6 w-6 text-primary" />
                   {dia}
                 </h2>
-                
-                <div className="space-y-3">
-                  {groupedHorarios[dia]?.map((horario) => {
-                    const disponibles = horario.cupos_totales - horario.cupos_ocupados;
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {horariosDelDia.map((horario) => {
+                    const cuposDisponibles = horario.cupos_totales - horario.cupos_ocupados;
                     const isReserved = userReservations.has(horario.id);
-                    const isFull = disponibles <= 0;
-                    
+                    const isFull = cuposDisponibles <= 0;
+
                     return (
-                      <Card key={horario.id} className="p-4 hover-scale">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-foreground">
+                      <Card key={horario.id} className="transition-sport hover:shadow-sport">
+                        <CardHeader>
+                          <CardTitle className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              <Clock className="h-5 w-5 text-primary" />
                               {horario.bloque}
-                            </div>
-                            {isReserved && (
-                              <CheckCircle className="w-4 h-4 text-secondary" />
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Clock className="w-4 h-4 mr-2" />
-                            {horario.hora_inicio.slice(0, 5)} - {horario.hora_fin.slice(0, 5)}
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center text-sm">
-                              <Users className="w-4 h-4 mr-2 text-muted-foreground" />
-                              <span className={getCuposColor(horario.cupos_ocupados, horario.cupos_totales)}>
-                                {disponibles}/{horario.cupos_totales}
+                            </span>
+                            <Badge variant={getCuposBadgeVariant(cuposDisponibles, horario.cupos_totales)}>
+                              {cuposDisponibles}/{horario.cupos_totales}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription>
+                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Users className={`h-4 w-4 ${getCuposColor(cuposDisponibles, horario.cupos_totales)}`} />
+                              <span className={`text-sm font-medium ${getCuposColor(cuposDisponibles, horario.cupos_totales)}`}>
+                                {cuposDisponibles > 0 
+                                  ? `${cuposDisponibles} cupos disponibles`
+                                  : 'Sin cupos disponibles'}
                               </span>
                             </div>
-                            <Badge variant={getCuposBadgeVariant(horario.cupos_ocupados, horario.cupos_totales)}>
-                              {disponibles > 0 ? `${disponibles} disponibles` : "Completo"}
-                            </Badge>
+
+                            {isReserved ? (
+                              <Button
+                                onClick={() => handleCancelReservation(horario.id)}
+                                disabled={reserving === horario.id}
+                                variant="destructive"
+                                className="w-full"
+                              >
+                                {reserving === horario.id ? 'Cancelando...' : 'Cancelar Reserva'}
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => handleReservation(horario.id)}
+                                disabled={isFull || reserving === horario.id}
+                                className="w-full"
+                              >
+                                {reserving === horario.id 
+                                  ? 'Reservando...' 
+                                  : isFull 
+                                  ? 'Sin cupos' 
+                                  : 'Reservar'}
+                              </Button>
+                            )}
                           </div>
-                          
-                          <div className="w-full bg-muted rounded-full h-2">
-                            <div 
-                              className="h-2 rounded-full bg-primary transition-all duration-300"
-                              style={{ width: `${(horario.cupos_ocupados / horario.cupos_totales) * 100}%` }}
-                            ></div>
-                          </div>
-                          
-                          {isReserved ? (
-                            <Button 
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => handleCancelReservation(horario.id)}
-                            >
-                              Cancelar Reserva
-                            </Button>
-                          ) : (
-                            <Button 
-                              variant={isFull ? "ghost" : "sport"}
-                              size="sm"
-                              className="w-full"
-                              disabled={isFull || reserving === horario.id}
-                              onClick={() => handleReservation(horario.id)}
-                            >
-                              {reserving === horario.id ? "Reservando..." :
-                               isFull ? "Sin Cupos" : "Reservar"}
-                            </Button>
-                          )}
-                        </div>
+                        </CardContent>
                       </Card>
                     );
                   })}
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-12 text-center">
-            <div className="bg-muted/30 rounded-lg p-6 max-w-2xl mx-auto">
-              <Calendar className="w-8 h-8 text-primary mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Información Important</h3>
-              <p className="text-muted-foreground text-sm">
-                • Cada sesión tiene 20 cupos disponibles<br/>
-                • Puedes reservar con hasta 24 horas de anticipación<br/>
-                • Cancela tu reserva si no puedes asistir<br/>
-                • Los horarios están basados en bloques académicos
-              </p>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      </section>
+
+        {/* Important Information */}
+        <Card className="mt-12 border-accent/20 bg-accent/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-accent">
+              <AlertCircle className="h-5 w-5" />
+              Información Importante
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>• Las reservas se actualizan en tiempo real</p>
+            <p>• Puedes cancelar tu reserva hasta 1 hora antes del horario</p>
+            <p>• Máximo 3 reservas activas por persona</p>
+            <p>• Recuerda llegar 10 minutos antes de tu horario reservado</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

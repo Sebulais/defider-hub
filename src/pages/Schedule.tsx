@@ -1,35 +1,24 @@
-import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  Users, 
-  Dumbbell,
-  GraduationCap,
-  X,
-  CalendarDays
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { Calendar, Plus, Edit2, Save, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TallerInscription {
   id: string;
   taller_id: string;
   talleres: {
-    id: string;
     name: string;
-    instructor: string;
     schedule: string;
     location: string;
-    level: string;
-    category: string;
-    color: string;
-    duration: string;
+    campus: string;
   };
 }
 
@@ -37,7 +26,6 @@ interface GymReservation {
   id: string;
   horario_gym_id: string;
   horarios_gym: {
-    id: string;
     dia: string;
     bloque: string;
     hora_inicio: string;
@@ -45,318 +33,475 @@ interface GymReservation {
   };
 }
 
-const Schedule = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [tallerInscriptions, setTallerInscriptions] = useState<TallerInscription[]>([]);
-  const [gymReservations, setGymReservations] = useState<GymReservation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [canceling, setCanceling] = useState<string | null>(null);
+interface RamoPersonal {
+  id: string;
+  nombre_ramo: string;
+  sala: string;
+  dia: string;
+  bloque_inicio: number;
+  bloque_fin: number;
+  color: string;
+}
 
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
+interface ScheduleEvent {
+  type: 'taller' | 'gym' | 'ramo';
+  id: string;
+  name: string;
+  sala?: string;
+  color: string;
+  canDelete: boolean;
+}
+
+const BLOQUES = [
+  { num: 1, hora: '08:15-08:50' },
+  { num: 2, hora: '08:50-09:25' },
+  { num: 3, hora: '09:40-10:15' },
+  { num: 4, hora: '10:15-10:50' },
+  { num: 5, hora: '11:05-11:40' },
+  { num: 6, hora: '11:40-12:15' },
+  { num: 7, hora: '12:30-13:05' },
+  { num: 8, hora: '13:05-13:40' },
+  { num: 9, hora: '13:55-14:30' },
+  { num: 10, hora: '14:30-15:05' },
+  { num: 11, hora: '15:20-15:55' },
+  { num: 12, hora: '15:55-16:30' },
+  { num: 13, hora: '16:45-17:20' },
+  { num: 14, hora: '17:20-17:55' },
+];
+
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+
+const COLORES_RAMOS = [
+  { value: 'bg-purple-500', label: 'Morado' },
+  { value: 'bg-pink-500', label: 'Rosado' },
+  { value: 'bg-indigo-500', label: 'Índigo' },
+  { value: 'bg-cyan-500', label: 'Cyan' },
+  { value: 'bg-teal-500', label: 'Verde Azulado' },
+  { value: 'bg-orange-500', label: 'Naranja' },
+];
+
+const Schedule = () => {
+  const [talleres, setTalleres] = useState<TallerInscription[]>([]);
+  const [gymReservations, setGymReservations] = useState<GymReservation[]>([]);
+  const [ramos, setRamos] = useState<RamoPersonal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: number } | null>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Form state
+  const [formData, setFormData] = useState({
+    nombre_ramo: '',
+    sala: '',
+    dia: '',
+    bloque_inicio: '',
+    bloque_fin: '',
+    color: 'bg-purple-500',
+  });
 
   useEffect(() => {
-    fetchUserSchedule();
-  }, [user]);
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    fetchScheduleData();
 
-  const fetchUserSchedule = async () => {
+    // Real-time subscriptions
+    const channel = supabase
+      .channel('schedule-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inscripciones_talleres' }, () => fetchScheduleData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas_gym' }, () => fetchScheduleData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ramos_personales' }, () => fetchScheduleData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, navigate]);
+
+  const fetchScheduleData = async () => {
+    if (!user) return;
+
     try {
-      // Fetch taller inscriptions
-      const { data: talleres, error: talleresError } = await supabase
-        .from('inscripciones_talleres')
-        .select(`
-          id,
-          taller_id,
-          talleres (
-            id,
-            name,
-            instructor,
-            schedule,
-            location,
-            level,
-            category,
-            color,
-            duration
-          )
-        `)
-        .eq('user_id', user.id);
+      const [talleresRes, gymRes, ramosRes] = await Promise.all([
+        supabase
+          .from('inscripciones_talleres')
+          .select('id, taller_id, talleres(name, schedule, location, campus)')
+          .eq('user_id', user.id),
+        supabase
+          .from('reservas_gym')
+          .select('id, horario_gym_id, horarios_gym(dia, bloque, hora_inicio, hora_fin)')
+          .eq('user_id', user.id),
+        supabase
+          .from('ramos_personales')
+          .select('*')
+          .eq('user_id', user.id),
+      ]);
 
-      if (talleresError) throw talleresError;
+      if (talleresRes.error) throw talleresRes.error;
+      if (gymRes.error) throw gymRes.error;
+      if (ramosRes.error) throw ramosRes.error;
 
-      // Fetch gym reservations
-      const { data: gym, error: gymError } = await supabase
-        .from('reservas_gym')
-        .select(`
-          id,
-          horario_gym_id,
-          horarios_gym (
-            id,
-            dia,
-            bloque,
-            hora_inicio,
-            hora_fin
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (gymError) throw gymError;
-
-      setTallerInscriptions(talleres || []);
-      setGymReservations(gym || []);
+      setTalleres(talleresRes.data || []);
+      setGymReservations(gymRes.data || []);
+      setRamos(ramosRes.data || []);
     } catch (error) {
-      console.error('Error fetching user schedule:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo cargar tu horario",
-        variant: "destructive"
-      });
+      console.error('Error fetching schedule:', error);
+      toast.error('Error al cargar horario');
     } finally {
       setLoading(false);
     }
   };
 
-  const cancelTallerInscription = async (inscriptionId: string) => {
-    setCanceling(inscriptionId);
+  const parseScheduleToSlots = (schedule: string): { dia: string; bloques: number[] }[] => {
+    const diasMatch = schedule.match(/([A-Za-zé]+)(?:-([A-Za-zé]+))?(?:-([A-Za-zé]+))?/);
+    const bloquesMatch = schedule.match(/Bloque (\d+)-(\d+)/);
+
+    if (!diasMatch || !bloquesMatch) return [];
+
+    const diasMap: { [key: string]: string } = {
+      'Lun': 'Lunes', 'Mar': 'Martes', 'Mié': 'Miércoles', 'Jue': 'Jueves', 'Vie': 'Viernes'
+    };
+
+    const dias = [diasMatch[1], diasMatch[2], diasMatch[3]].filter(Boolean).map(d => diasMap[d] || d);
+    const bloqueInicio = parseInt(bloquesMatch[1]);
+    const bloqueFin = parseInt(bloquesMatch[2]);
+    const bloques = Array.from({ length: bloqueFin - bloqueInicio + 1 }, (_, i) => bloqueInicio + i);
+
+    return dias.map(dia => ({ dia, bloques }));
+  };
+
+  const getEventForSlot = (dia: string, bloque: number): ScheduleEvent | null => {
+    // Check talleres
+    for (const taller of talleres) {
+      const slots = parseScheduleToSlots(taller.talleres.schedule);
+      for (const slot of slots) {
+        if (slot.dia === dia && slot.bloques.includes(bloque)) {
+          return {
+            type: 'taller',
+            id: taller.id,
+            name: taller.talleres.name,
+            sala: taller.talleres.location,
+            color: 'bg-secondary',
+            canDelete: false,
+          };
+        }
+      }
+    }
+
+    // Check gym
+    for (const gym of gymReservations) {
+      if (gym.horarios_gym.dia === dia) {
+        const bloqueMatch = gym.horarios_gym.bloque.match(/Bloque (\d+)/);
+        if (bloqueMatch && parseInt(bloqueMatch[1]) === bloque) {
+          return {
+            type: 'gym',
+            id: gym.id,
+            name: 'Gimnasio',
+            sala: gym.horarios_gym.bloque,
+            color: 'bg-primary',
+            canDelete: false,
+          };
+        }
+      }
+    }
+
+    // Check ramos
+    for (const ramo of ramos) {
+      if (ramo.dia === dia && bloque >= ramo.bloque_inicio && bloque <= ramo.bloque_fin) {
+        return {
+          type: 'ramo',
+          id: ramo.id,
+          name: ramo.nombre_ramo,
+          sala: ramo.sala,
+          color: ramo.color,
+          canDelete: true,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const handleAddRamo = async () => {
+    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio || !formData.bloque_fin) {
+      toast.error('Completa todos los campos obligatorios');
+      return;
+    }
+
+    const bloqueInicio = parseInt(formData.bloque_inicio);
+    const bloqueFin = parseInt(formData.bloque_fin);
+
+    if (bloqueInicio > bloqueFin) {
+      toast.error('El bloque de inicio debe ser menor o igual al bloque final');
+      return;
+    }
+
+    // Check conflicts
+    for (let b = bloqueInicio; b <= bloqueFin; b++) {
+      const existing = getEventForSlot(formData.dia, b);
+      if (existing) {
+        toast.error(`Conflicto detectado en ${formData.dia} bloque ${b}`);
+        return;
+      }
+    }
+
     try {
-      const { error } = await supabase
-        .from('inscripciones_talleres')
-        .delete()
-        .eq('id', inscriptionId)
-        .eq('user_id', user.id);
+      const { error } = await supabase.from('ramos_personales').insert({
+        user_id: user.id,
+        nombre_ramo: formData.nombre_ramo,
+        sala: formData.sala || '',
+        dia: formData.dia,
+        bloque_inicio: bloqueInicio,
+        bloque_fin: bloqueFin,
+        color: formData.color,
+      });
 
       if (error) throw error;
 
-      toast({
-        title: "Inscripción cancelada",
-        description: "Te has desinscrito del taller exitosamente"
+      toast.success('Ramo agregado exitosamente');
+      setShowAddDialog(false);
+      setFormData({
+        nombre_ramo: '',
+        sala: '',
+        dia: '',
+        bloque_inicio: '',
+        bloque_fin: '',
+        color: 'bg-purple-500',
       });
-      
-      fetchUserSchedule();
+      fetchScheduleData();
     } catch (error) {
-      console.error('Error canceling inscription:', error);
-      toast({
-        title: "Error", 
-        description: "No se pudo cancelar la inscripción",
-        variant: "destructive"
-      });
-    } finally {
-      setCanceling(null);
+      console.error('Error adding ramo:', error);
+      toast.error('Error al agregar ramo');
     }
   };
 
-  const cancelGymReservation = async (reservationId: string) => {
-    setCanceling(reservationId);
+  const handleDeleteRamo = async (ramoId: string) => {
     try {
-      const { error } = await supabase
-        .from('reservas_gym')
-        .delete()
-        .eq('id', reservationId)
-        .eq('user_id', user.id);
-
+      const { error } = await supabase.from('ramos_personales').delete().eq('id', ramoId);
       if (error) throw error;
-
-      toast({
-        title: "Reserva cancelada",
-        description: "Has cancelado tu reserva de gimnasio exitosamente"
-      });
-      
-      fetchUserSchedule();
+      toast.success('Ramo eliminado');
+      fetchScheduleData();
     } catch (error) {
-      console.error('Error canceling reservation:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo cancelar la reserva",
-        variant: "destructive"
-      });
-    } finally {
-      setCanceling(null);
+      console.error('Error deleting ramo:', error);
+      toast.error('Error al eliminar ramo');
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Cargando tu horario...</p>
+          <p className="text-muted-foreground">Cargando horario...</p>
         </div>
       </div>
     );
   }
 
-  const hasActivities = tallerInscriptions.length > 0 || gymReservations.length > 0;
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="gradient-hero text-white py-20">
+      <div className="gradient-primary text-primary-foreground py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-5xl md:text-6xl font-bold mb-4">
-              Mi Horario Personal
-            </h1>
-            <p className="text-xl max-w-3xl mx-auto opacity-90">
-              Aquí puedes ver todas tus actividades: talleres deportivos inscritos y reservas de gimnasio.
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold mb-2 flex items-center gap-2">
+                <Calendar className="h-8 w-8" />
+                Mi Horario Personal
+              </h1>
+              <p className="text-lg opacity-90">Visualiza y gestiona tu horario completo</p>
+            </div>
+            <Button
+              onClick={() => setEditMode(!editMode)}
+              variant={editMode ? "secondary" : "outline"}
+              className="gap-2"
+            >
+              {editMode ? (
+                <>
+                  <Save className="h-4 w-4" />
+                  Guardar Cambios
+                </>
+              ) : (
+                <>
+                  <Edit2 className="h-4 w-4" />
+                  Editar Horario
+                </>
+              )}
+            </Button>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          {!hasActivities ? (
-            <div className="text-center py-20">
-              <CalendarDays className="w-24 h-24 text-muted-foreground mx-auto mb-6" />
-              <h2 className="text-2xl font-bold text-foreground mb-4">
-                No tienes actividades programadas
-              </h2>
-              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                Comienza inscribiéndote en talleres deportivos o reservando cupos en el gimnasio
-              </p>
-              <div className="flex gap-4 justify-center">
-                <Button variant="sport" asChild>
-                  <a href="/talleres">Ver Talleres</a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a href="/gym">Reservar Gimnasio</a>
-                </Button>
+      <div className="container mx-auto px-4 py-8">
+        <Card className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="p-3 text-left font-semibold bg-muted/50">Bloque</th>
+                {DIAS.map(dia => (
+                  <th key={dia} className="p-3 text-center font-semibold bg-muted/50 min-w-[150px]">{dia}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {BLOQUES.map(({ num, hora }) => (
+                <tr key={num} className="border-b hover:bg-muted/20">
+                  <td className="p-3 font-medium text-sm">
+                    <div className="flex flex-col">
+                      <span className="font-bold">Bloque {num}</span>
+                      <span className="text-xs text-muted-foreground">{hora}</span>
+                    </div>
+                  </td>
+                  {DIAS.map(dia => {
+                    const event = getEventForSlot(dia, num);
+                    
+                    return (
+                      <td key={`${dia}-${num}`} className="p-1 text-center align-top">
+                        {event ? (
+                          <div className={`${event.color} text-white rounded p-2 text-xs relative group`}>
+                            <div className="font-semibold">{event.name}</div>
+                            {event.sala && <div className="text-xs opacity-90">{event.sala}</div>}
+                            {editMode && event.canDelete && (
+                              <button
+                                onClick={() => handleDeleteRamo(event.id)}
+                                className="absolute top-1 right-1 bg-destructive rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        ) : editMode ? (
+                          <button
+                            onClick={() => {
+                              setSelectedSlot({ dia, bloque: num });
+                              setFormData({ ...formData, dia, bloque_inicio: num.toString(), bloque_fin: num.toString() });
+                              setShowAddDialog(true);
+                            }}
+                            className="w-full h-full min-h-[60px] border-2 border-dashed border-muted-foreground/30 rounded hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
+                          >
+                            <Plus className="h-5 w-5 text-muted-foreground" />
+                          </button>
+                        ) : (
+                          <div className="min-h-[60px]" />
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        {/* Legend */}
+        <div className="mt-6 flex gap-6 justify-center flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-secondary rounded" />
+            <span className="text-sm">Talleres DEFIDER</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-primary rounded" />
+            <span className="text-sm">Gimnasio</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-purple-500 rounded" />
+            <span className="text-sm">Ramos Académicos</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Ramo Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar Ramo Académico</DialogTitle>
+            <DialogDescription>Completa la información del ramo</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="nombre_ramo">Nombre del Ramo *</Label>
+              <Input
+                id="nombre_ramo"
+                value={formData.nombre_ramo}
+                onChange={(e) => setFormData({ ...formData, nombre_ramo: e.target.value })}
+                placeholder="Ej: Cálculo I"
+              />
+            </div>
+            <div>
+              <Label htmlFor="sala">Sala</Label>
+              <Input
+                id="sala"
+                value={formData.sala}
+                onChange={(e) => setFormData({ ...formData, sala: e.target.value })}
+                placeholder="Ej: E201"
+              />
+            </div>
+            <div>
+              <Label htmlFor="dia">Día *</Label>
+              <Select value={formData.dia} onValueChange={(v) => setFormData({ ...formData, dia: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona día" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIAS.map(dia => <SelectItem key={dia} value={dia}>{dia}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="bloque_inicio">Bloque Inicio *</Label>
+                <Select value={formData.bloque_inicio} onValueChange={(v) => setFormData({ ...formData, bloque_inicio: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Inicio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLOQUES.map(b => <SelectItem key={b.num} value={b.num.toString()}>Bloque {b.num}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="bloque_fin">Bloque Fin *</Label>
+                <Select value={formData.bloque_fin} onValueChange={(v) => setFormData({ ...formData, bloque_fin: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Fin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLOQUES.map(b => <SelectItem key={b.num} value={b.num.toString()}>Bloque {b.num}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          ) : (
-            <div className="space-y-8">
-              {/* Talleres Inscritos */}
-              {tallerInscriptions.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <GraduationCap className="w-6 h-6 text-primary" />
-                    <h2 className="text-2xl font-bold text-foreground">
-                      Talleres Deportivos ({tallerInscriptions.length})
-                    </h2>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {tallerInscriptions.map((inscription) => (
-                      <Card key={inscription.id} className="card-sport relative overflow-hidden">
-                        {/* Color accent */}
-                        <div className={`absolute top-0 left-0 w-2 h-full ${inscription.talleres.color}`}></div>
-                        
-                        <div className="pl-6 pr-4 py-6">
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <h3 className="text-lg font-bold text-foreground mb-1">
-                                {inscription.talleres.name}
-                              </h3>
-                              <p className="text-muted-foreground text-sm">
-                                {inscription.talleres.instructor}
-                              </p>
-                            </div>
-                            <Badge variant="secondary" className="bg-secondary text-white">
-                              Inscrito
-                            </Badge>
-                          </div>
-
-                          <div className="space-y-2 mb-4">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Calendar className="w-4 h-4 mr-2" />
-                              {inscription.talleres.schedule}
-                            </div>
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <MapPin className="w-4 h-4 mr-2" />
-                              {inscription.talleres.location}
-                            </div>
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Clock className="w-4 h-4 mr-2" />
-                              {inscription.talleres.duration}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <Badge variant="outline">
-                              {inscription.talleres.category}
-                            </Badge>
-                            <Button 
-                              variant="destructive"
-                              size="sm"
-                              disabled={canceling === inscription.id}
-                              onClick={() => cancelTallerInscription(inscription.id)}
-                            >
-                              {canceling === inscription.id ? (
-                                "Cancelando..."
-                              ) : (
-                                <>
-                                  <X className="w-4 h-4 mr-1" />
-                                  Cancelar
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Reservas de Gimnasio */}
-              {gymReservations.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Dumbbell className="w-6 h-6 text-primary" />
-                    <h2 className="text-2xl font-bold text-foreground">
-                      Reservas de Gimnasio ({gymReservations.length})
-                    </h2>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {gymReservations.map((reservation) => (
-                      <Card key={reservation.id} className="p-4 hover-scale">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-foreground">
-                              {reservation.horarios_gym.dia}
-                            </div>
-                            <Badge variant="secondary" className="bg-accent text-white">
-                              Reservado
-                            </Badge>
-                          </div>
-                          
-                          <div className="text-lg font-bold text-foreground">
-                            {reservation.horarios_gym.bloque}
-                          </div>
-                          
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Clock className="w-4 h-4 mr-2" />
-                            {reservation.horarios_gym.hora_inicio.slice(0, 5)} - {reservation.horarios_gym.hora_fin.slice(0, 5)}
-                          </div>
-                          
-                          <Button 
-                            variant="destructive"
-                            size="sm"
-                            className="w-full"
-                            disabled={canceling === reservation.id}
-                            onClick={() => cancelGymReservation(reservation.id)}
-                          >
-                            {canceling === reservation.id ? (
-                              "Cancelando..."
-                            ) : (
-                              <>
-                                <X className="w-4 h-4 mr-1" />
-                                Cancelar
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Select value={formData.color} onValueChange={(v) => setFormData({ ...formData, color: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COLORES_RAMOS.map(c => (
+                    <SelectItem key={c.value} value={c.value}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 ${c.value} rounded`} />
+                        {c.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
-      </section>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAddRamo}>
+                Agregar Ramo
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
