@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Users, 
   Clock, 
@@ -12,8 +22,7 @@ import {
   Star,
   Calendar,
   User,
-  Search,
-  Heart
+  Search
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +37,20 @@ const Talleres = () => {
   const [talleres, setTalleres] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [inscribing, setInscribing] = useState<string | null>(null);
+  const [misInscripciones, setMisInscripciones] = useState<Set<string>>(new Set());
+  
+  // Estado para el diálogo de confirmación
+  const [dialogState, setDialogState] = useState<{
+    open: boolean;
+    tallerId: string | null;
+    tallerName: string;
+    action: 'inscribir' | 'desinscribir';
+  }>({
+    open: false,
+    tallerId: null,
+    tallerName: '',
+    action: 'inscribir'
+  });
 
   if (!user) {
     return <Navigate to="/auth" replace />;
@@ -35,6 +58,7 @@ const Talleres = () => {
 
   useEffect(() => {
     fetchTalleres();
+    fetchMisInscripciones();
   }, []);
 
   const fetchTalleres = async () => {
@@ -56,6 +80,45 @@ const Talleres = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMisInscripciones = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('inscripciones_talleres')
+        .select('taller_id')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      
+      const inscripcionesSet = new Set(data?.map(i => i.taller_id) || []);
+      setMisInscripciones(inscripcionesSet);
+    } catch (error) {
+      console.error('Error fetching inscripciones:', error);
+    }
+  };
+
+  const openConfirmDialog = (tallerId: string, tallerName: string, action: 'inscribir' | 'desinscribir') => {
+    setDialogState({
+      open: true,
+      tallerId,
+      tallerName,
+      action
+    });
+  };
+
+  const handleConfirmAction = async () => {
+    if (!dialogState.tallerId) return;
+
+    if (dialogState.action === 'inscribir') {
+      await handleInscription(dialogState.tallerId);
+    } else {
+      await handleDesinscription(dialogState.tallerId);
+    }
+
+    setDialogState({ open: false, tallerId: null, tallerName: '', action: 'inscribir' });
   };
 
   const handleInscription = async (tallerId: string) => {
@@ -87,13 +150,45 @@ const Talleres = () => {
           title: "¡Inscrito!",
           description: "Te has inscrito exitosamente al taller"
         });
-        fetchTalleres();
+        await fetchMisInscripciones();
+        await fetchTalleres();
       }
     } catch (error) {
       console.error('Error inscribing:', error);
       toast({
         title: "Error",
         description: "No se pudo completar la inscripción",
+        variant: "destructive"
+      });
+    } finally {
+      setInscribing(null);
+    }
+  };
+
+  const handleDesinscription = async (tallerId: string) => {
+    if (!user) return;
+
+    setInscribing(tallerId);
+    try {
+      const { error } = await supabase
+        .from('inscripciones_talleres')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('taller_id', tallerId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Desinscrito",
+        description: "Te has desinscrito del taller exitosamente"
+      });
+      await fetchMisInscripciones();
+      await fetchTalleres();
+    } catch (error) {
+      console.error('Error unsubscribing:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo completar la desinscripción",
         variant: "destructive"
       });
     } finally {
@@ -238,84 +333,124 @@ const Talleres = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {talleresFiltrados.map((taller) => (
-                <Card key={taller.id} className="card-sport hover-scale overflow-hidden">
-                  <div className={`h-1 ${taller.color}`}></div>
-                  
-                  <div className="p-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="text-xs">
-                          {taller.category}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {getCampusLabel(taller.campus)}
-                        </Badge>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-xl font-bold text-foreground mb-2">{taller.name}</h3>
-                        <p className="text-sm text-muted-foreground line-clamp-2">{taller.description}</p>
-                      </div>
+              {talleresFiltrados.map((taller) => {
+                const estaInscrito = misInscripciones.has(taller.id);
+                
+                return (
+                  <Card key={taller.id} className="card-sport hover-scale overflow-hidden">
+                    <div className={`h-1 ${taller.color}`}></div>
+                    
+                    <div className="p-6">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary" className="text-xs">
+                            {taller.category}
+                          </Badge>
+                          <div className="flex gap-2">
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {getCampusLabel(taller.campus)}
+                            </Badge>
+                            {estaInscrito && (
+                              <Badge variant="default" className="text-xs bg-green-600">
+                                Inscrito
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <h3 className="text-xl font-bold text-foreground mb-2">{taller.name}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{taller.description}</p>
+                        </div>
 
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <User className="h-4 w-4" />
-                          <span>{taller.instructor}</span>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <User className="h-4 w-4" />
+                            <span>{taller.instructor}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Calendar className="h-4 w-4" />
+                            <span>{formatSchedule(taller.schedule)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                            <span>{taller.location}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>{formatSchedule(taller.schedule)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="h-4 w-4" />
-                          <span>{taller.location}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center justify-between pt-3 border-t border-border">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">
-                            {taller.enrolled}/{taller.capacity}
-                          </span>
+                        <div className="flex items-center justify-between pt-3 border-t border-border">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              {taller.enrolled}/{taller.capacity}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Star className="h-4 w-4 text-accent fill-current" />
+                            <span className="text-sm font-medium">{taller.rating}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-accent fill-current" />
-                          <span className="text-sm font-medium">{taller.rating}</span>
+
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full ${taller.color} transition-all duration-300`}
+                            style={{ width: `${(taller.enrolled / taller.capacity) * 100}%` }}
+                          ></div>
                         </div>
-                      </div>
 
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${taller.color} transition-all duration-300`}
-                          style={{ width: `${(taller.enrolled / taller.capacity) * 100}%` }}
-                        ></div>
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                        <Button 
-                          variant={taller.available ? "default" : "outline"}
-                          size="sm" 
-                          className="flex-1"
-                          disabled={!taller.available || inscribing === taller.id}
-                          onClick={() => handleInscription(taller.id)}
-                        >
-                          {inscribing === taller.id ? "Inscribiendo..." : 
-                           taller.available ? "Inscribirse" : "Lista de Espera"}
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Heart className="w-4 h-4" />
-                        </Button>
+                        <div className="pt-2">
+                          <Button 
+                            variant={estaInscrito ? "outline" : (taller.available ? "default" : "outline")}
+                            size="sm" 
+                            className="w-full"
+                            disabled={(!taller.available && !estaInscrito) || inscribing === taller.id}
+                            onClick={() => {
+                              if (estaInscrito) {
+                                openConfirmDialog(taller.id, taller.name, 'desinscribir');
+                              } else if (taller.available) {
+                                openConfirmDialog(taller.id, taller.name, 'inscribir');
+                              }
+                            }}
+                          >
+                            {inscribing === taller.id ? "Procesando..." : 
+                             estaInscrito ? "Desinscribirse" :
+                             taller.available ? "Inscribirse" : "Cupos Agotados"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
       </section>
+
+      {/* Diálogo de Confirmación */}
+      <AlertDialog open={dialogState.open} onOpenChange={(open) => 
+        setDialogState(prev => ({ ...prev, open }))
+      }>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {dialogState.action === 'inscribir' ? '¿Confirmar inscripción?' : '¿Confirmar desinscripción?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {dialogState.action === 'inscribir' 
+                ? `¿Estás seguro de que deseas inscribirte en "${dialogState.tallerName}"?`
+                : `¿Estás seguro de que deseas desinscribirte de "${dialogState.tallerName}"? Esta acción liberará tu cupo.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAction}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
