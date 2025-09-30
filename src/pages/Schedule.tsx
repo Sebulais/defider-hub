@@ -18,7 +18,7 @@ interface TallerInscription {
     name: string;
     schedule: string;
     location: string;
-    campus: string;
+    color: string;
   };
 }
 
@@ -28,8 +28,6 @@ interface GymReservation {
   horarios_gym: {
     dia: string;
     bloque: string;
-    hora_inicio: string;
-    hora_fin: string;
   };
 }
 
@@ -53,20 +51,13 @@ interface ScheduleEvent {
 }
 
 const BLOQUES = [
-  { num: 1, hora: '08:15-08:50' },
-  { num: 2, hora: '08:50-09:25' },
-  { num: 3, hora: '09:40-10:15' },
-  { num: 4, hora: '10:15-10:50' },
-  { num: 5, hora: '11:05-11:40' },
-  { num: 6, hora: '11:40-12:15' },
-  { num: 7, hora: '12:30-13:05' },
-  { num: 8, hora: '13:05-13:40' },
-  { num: 9, hora: '13:55-14:30' },
-  { num: 10, hora: '14:30-15:05' },
-  { num: 11, hora: '15:20-15:55' },
-  { num: 12, hora: '15:55-16:30' },
-  { num: 13, hora: '16:45-17:20' },
-  { num: 14, hora: '17:20-17:55' },
+  { num: '1-2', hora: '08:15-09:25' },
+  { num: '3-4', hora: '09:40-10:50' },
+  { num: '5-6', hora: '11:05-12:15' },
+  { num: '7-8', hora: '12:30-13:40' },
+  { num: '9-10', hora: '14:40-15:50' },
+  { num: '11-12', hora: '16:05-17:15' },
+  { num: '13-14', hora: '17:30-18:40' },
 ];
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
@@ -87,7 +78,7 @@ const Schedule = () => {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: number } | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: string } | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -128,11 +119,11 @@ const Schedule = () => {
       const [talleresRes, gymRes, ramosRes] = await Promise.all([
         supabase
           .from('inscripciones_talleres')
-          .select('id, taller_id, talleres(name, schedule, location, campus)')
+          .select('id, taller_id, talleres(name, schedule, location, color)')
           .eq('user_id', user.id),
         supabase
           .from('reservas_gym')
-          .select('id, horario_gym_id, horarios_gym(dia, bloque, hora_inicio, hora_fin)')
+          .select('id, horario_gym_id, horarios_gym(dia, bloque)')
           .eq('user_id', user.id),
         supabase
           .from('ramos_personales')
@@ -155,7 +146,7 @@ const Schedule = () => {
     }
   };
 
-  const parseScheduleToSlots = (schedule: string): { dia: string; bloques: number[] }[] => {
+  const parseScheduleToSlots = (schedule: string): { dia: string; bloques: string[] }[] => {
     const diasMatch = schedule.match(/([A-Za-zé]+)(?:-([A-Za-zé]+))?(?:-([A-Za-zé]+))?/);
     const bloquesMatch = schedule.match(/Bloque (\d+)-(\d+)/);
 
@@ -165,31 +156,66 @@ const Schedule = () => {
       'Lun': 'Lunes', 'Mar': 'Martes', 'Mié': 'Miércoles', 'Jue': 'Jueves', 'Vie': 'Viernes'
     };
 
-    const dias = [diasMatch[1], diasMatch[2], diasMatch[3]].filter(Boolean).map(d => diasMap[d] || d);
-    const bloqueInicio = parseInt(bloquesMatch[1]);
-    const bloqueFin = parseInt(bloquesMatch[2]);
-    const bloques = Array.from({ length: bloqueFin - bloqueInicio + 1 }, (_, i) => bloqueInicio + i);
+    const dias = [diasMatch[1], diasMatch[2], diasMatch[3]]
+      .filter(Boolean)
+      .map(d => diasMap[d] || d);
+    
+    const bloqueInicio = bloquesMatch[1];
+    const bloqueFin = bloquesMatch[2];
+    const bloquePar = `${bloqueInicio}-${bloqueFin}`;
 
-    return dias.map(dia => ({ dia, bloques }));
+    return dias.map(dia => ({ dia, bloques: [bloquePar] }));
   };
 
-  const getEventForSlot = (dia: string, bloque: number): ScheduleEvent | null => {
+  const getEventForSlot = (dia: string, bloquePar: string): ScheduleEvent | null => {
     // Check talleres
     for (const taller of talleres) {
       const slots = parseScheduleToSlots(taller.talleres.schedule);
       for (const slot of slots) {
-        if (slot.dia === dia && slot.bloques.includes(bloque)) {
+        if (slot.dia === dia && slot.bloques.includes(bloquePar)) {
           return {
             type: 'taller',
             id: taller.id,
             name: taller.talleres.name,
             sala: taller.talleres.location,
-            color: 'bg-secondary',
+            color: taller.talleres.color,
             canDelete: false,
           };
         }
       }
     }
+
+    // Check gym
+    for (const gym of gymReservations) {
+      if (gym.horarios_gym.dia === dia && gym.horarios_gym.bloque === `Bloque ${bloquePar}`) {
+        return {
+          type: 'gym',
+          id: gym.id,
+          name: 'Gimnasio',
+          sala: gym.horarios_gym.bloque,
+          color: 'bg-primary',
+          canDelete: false,
+        };
+      }
+    }
+  
+    // Check ramos (convertir bloque_inicio-bloque_fin a formato par)
+    for (const ramo of ramos) {
+      const ramoPar = `${ramo.bloque_inicio}-${ramo.bloque_fin}`;
+      if (ramo.dia === dia && ramoPar === bloquePar) {
+        return {
+          type: 'ramo',
+          id: ramo.id,
+          name: ramo.nombre_ramo,
+          sala: ramo.sala,
+          color: ramo.color,
+          canDelete: true,
+        };
+      }
+    }
+  
+    return null;
+  };
 
     // Check gym
     for (const gym of gymReservations) {
@@ -226,26 +252,20 @@ const Schedule = () => {
   };
 
   const handleAddRamo = async () => {
-    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio || !formData.bloque_fin) {
+    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
       toast.error('Completa todos los campos obligatorios');
       return;
     }
 
     const bloqueInicio = parseInt(formData.bloque_inicio);
     const bloqueFin = parseInt(formData.bloque_fin);
-
-    if (bloqueInicio > bloqueFin) {
-      toast.error('El bloque de inicio debe ser menor o igual al bloque final');
-      return;
-    }
+    const bloquePar = `${bloqueInicio}-${bloqueFin}`;
 
     // Check conflicts
-    for (let b = bloqueInicio; b <= bloqueFin; b++) {
-      const existing = getEventForSlot(formData.dia, b);
-      if (existing) {
-        toast.error(`Conflicto detectado en ${formData.dia} bloque ${b}`);
-        return;
-      }
+    const existing = getEventForSlot(formData.dia, bloquePar);
+    if (existing) {
+      toast.error(`Conflicto detectado en ${formData.dia} bloque ${bloquePar}`);
+      return;
     }
 
     try {
@@ -375,8 +395,14 @@ const Schedule = () => {
                         ) : editMode ? (
                           <button
                             onClick={() => {
-                              setSelectedSlot({ dia, bloque: num });
-                              setFormData({ ...formData, dia, bloque_inicio: num.toString(), bloque_fin: num.toString() });
+                              setSelectedSlot({ dia, bloque: num }); // num ya es '1-2', '3-4', etc.
+                              const [inicio, fin] = num.split('-');
+                              setFormData({ 
+                                ...formData, 
+                                dia, 
+                                bloque_inicio: inicio, 
+                                bloque_fin: fin 
+                              });
                               setShowAddDialog(true);
                             }}
                             className="w-full h-full min-h-[60px] border-2 border-dashed border-muted-foreground/30 rounded hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
@@ -452,25 +478,28 @@ const Schedule = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="bloque_inicio">Bloque Inicio *</Label>
-                <Select value={formData.bloque_inicio} onValueChange={(v) => setFormData({ ...formData, bloque_inicio: v })}>
+                <Select value={formData.bloque_inicio} onValueChange={(v) => setFormData({ ...formData, bloque_inicio: v, bloque_fin: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Inicio" />
                   </SelectTrigger>
                   <SelectContent>
-                    {BLOQUES.map(b => <SelectItem key={b.num} value={b.num.toString()}>Bloque {b.num}</SelectItem>)}
+                    <SelectItem value="1">Bloque 1-2</SelectItem>
+                    <SelectItem value="3">Bloque 3-4</SelectItem>
+                    <SelectItem value="5">Bloque 5-6</SelectItem>
+                    <SelectItem value="7">Bloque 7-8</SelectItem>
+                    <SelectItem value="9">Bloque 9-10</SelectItem>
+                    <SelectItem value="11">Bloque 11-12</SelectItem>
+                    <SelectItem value="13">Bloque 13-14</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label htmlFor="bloque_fin">Bloque Fin *</Label>
-                <Select value={formData.bloque_fin} onValueChange={(v) => setFormData({ ...formData, bloque_fin: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Fin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BLOQUES.map(b => <SelectItem key={b.num} value={b.num.toString()}>Bloque {b.num}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input 
+                  value={formData.bloque_fin} 
+                  disabled 
+                  className="bg-muted"
+                />
               </div>
             </div>
             <div>
