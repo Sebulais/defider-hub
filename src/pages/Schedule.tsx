@@ -217,40 +217,6 @@ const Schedule = () => {
     return null;
   };
 
-    // Check gym
-    for (const gym of gymReservations) {
-      if (gym.horarios_gym.dia === dia) {
-        const bloqueMatch = gym.horarios_gym.bloque.match(/Bloque (\d+)/);
-        if (bloqueMatch && parseInt(bloqueMatch[1]) === bloque) {
-          return {
-            type: 'gym',
-            id: gym.id,
-            name: 'Gimnasio',
-            sala: gym.horarios_gym.bloque,
-            color: 'bg-primary',
-            canDelete: false,
-          };
-        }
-      }
-    }
-
-    // Check ramos
-    for (const ramo of ramos) {
-      if (ramo.dia === dia && bloque >= ramo.bloque_inicio && bloque <= ramo.bloque_fin) {
-        return {
-          type: 'ramo',
-          id: ramo.id,
-          name: ramo.nombre_ramo,
-          sala: ramo.sala,
-          color: ramo.color,
-          canDelete: true,
-        };
-      }
-    }
-
-    return null;
-  };
-
   const handleAddRamo = async () => {
     if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
       toast.error('Completa todos los campos obligatorios');
