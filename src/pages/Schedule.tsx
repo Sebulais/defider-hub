@@ -291,12 +291,11 @@ const Schedule = () => {
 
   const handleDelete = async (event: ScheduleEvent) => {
     try {
-      if (event.type == 'ramo') {
-        const { error } = await supabase.from('ramos_personales').delete().eq('id', ramoId);
+      if (event.type === 'ramo') {
+        const { error } = await supabase.from('ramos_personales').delete().eq('id', event.id);
         if (error) throw error;
         toast.success('Ramo eliminado');
-      }
-      if (event.type === 'taller') {
+      } else if (event.type === 'taller') {
         const { error } = await supabase.from('inscripciones_talleres').delete().eq('id', event.id);
         if (error) throw error;
         toast.success('Taller eliminado del horario');
