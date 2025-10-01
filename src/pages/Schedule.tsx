@@ -526,13 +526,13 @@ const Schedule = () => {
                     <SelectValue placeholder="Inicio" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Bloque 1-2</SelectItem>
-                    <SelectItem value="3">Bloque 3-4</SelectItem>
-                    <SelectItem value="5">Bloque 5-6</SelectItem>
-                    <SelectItem value="7">Bloque 7-8</SelectItem>
-                    <SelectItem value="9">Bloque 9-10</SelectItem>
-                    <SelectItem value="11">Bloque 11-12</SelectItem>
-                    <SelectItem value="13">Bloque 13-14</SelectItem>
+                    <SelectItem value="2">Bloque 1-2</SelectItem>
+                    <SelectItem value="4">Bloque 3-4</SelectItem>
+                    <SelectItem value="6">Bloque 5-6</SelectItem>
+                    <SelectItem value="8">Bloque 7-8</SelectItem>
+                    <SelectItem value="10">Bloque 9-10</SelectItem>
+                    <SelectItem value="12">Bloque 11-12</SelectItem>
+                    <SelectItem value="14">Bloque 13-14</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
