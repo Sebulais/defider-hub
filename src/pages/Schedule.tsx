@@ -79,6 +79,11 @@ const Schedule = () => {
   const [editMode, setEditMode] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: string } | null>(null);
+  
+  // Backup state for cancel functionality
+  const [backupTalleres, setBackupTalleres] = useState<TallerInscription[]>([]);
+  const [backupGymReservations, setBackupGymReservations] = useState<GymReservation[]>([]);
+  
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -215,6 +220,26 @@ const Schedule = () => {
     setShowAddDialog(false);
   };
 
+  const handleEnterEditMode = () => {
+    // Backup current state
+    setBackupTalleres([...talleres]);
+    setBackupGymReservations([...gymReservations]);
+    setEditMode(true);
+  };
+
+  const handleSaveChanges = () => {
+    setEditMode(false);
+    toast.success('Cambios guardados');
+  };
+
+  const handleCancelEdit = () => {
+    // Restore backup state
+    setTalleres(backupTalleres);
+    setGymReservations(backupGymReservations);
+    setEditMode(false);
+    toast.info('Cambios descartados');
+  };
+
   const handleDelete = async (event: ScheduleEvent) => {
     try {
       if (event.type === 'taller') {
@@ -256,23 +281,36 @@ const Schedule = () => {
               </h1>
               <p className="text-lg opacity-90">Visualiza y gestiona tu horario completo</p>
             </div>
-            <Button
-              onClick={() => setEditMode(!editMode)}
-              variant={editMode ? "secondary" : "default"}
-              className={`gap-2 ${!editMode ? 'bg-white text-primary hover:bg-white/90' : ''}`}
-            >
+            <div className="flex gap-2">
               {editMode ? (
-              <>
-                <Save className="h-4 w-4" />
-                Guardar Cambios
-              </>
-            ) : (
-              <>
-                <Edit2 className="h-4 w-4" />
-                Editar Horario
-              </>
-            )}
-          </Button>
+                <>
+                  <Button
+                    onClick={handleCancelEdit}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSaveChanges}
+                    variant="secondary"
+                    className="gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    Guardar Cambios
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={handleEnterEditMode}
+                  variant="default"
+                  className="gap-2 bg-white text-primary hover:bg-white/90"
+                >
+                  <Edit2 className="h-4 w-4" />
+                  Editar Horario
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
