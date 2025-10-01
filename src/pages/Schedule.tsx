@@ -104,7 +104,6 @@ const Schedule = () => {
       .channel('schedule-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inscripciones_talleres' }, () => fetchScheduleData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas_gym' }, () => fetchScheduleData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ramos_personales' }, () => fetchScheduleData())
       .subscribe();
 
     return () => {
@@ -116,7 +115,7 @@ const Schedule = () => {
     if (!user) return;
 
     try {
-      const [talleresRes, gymRes, ramosRes] = await Promise.all([
+      const [talleresRes, gymRes] = await Promise.all([
         supabase
           .from('inscripciones_talleres')
           .select('id, taller_id, talleres(name, schedule, location, color)')
@@ -125,19 +124,13 @@ const Schedule = () => {
           .from('reservas_gym')
           .select('id, horario_gym_id, horarios_gym(dia, bloque)')
           .eq('user_id', user.id),
-        supabase
-          .from('ramos_personales')
-          .select('*')
-          .eq('user_id', user.id),
       ]);
 
       if (talleresRes.error) throw talleresRes.error;
       if (gymRes.error) throw gymRes.error;
-      if (ramosRes.error) throw ramosRes.error;
 
       setTalleres(talleresRes.data || []);
       setGymReservations(gymRes.data || []);
-      setRamos(ramosRes.data || []);
     } catch (error) {
       console.error('Error fetching schedule:', error);
       toast.error('Error al cargar horario');
@@ -179,7 +172,7 @@ const Schedule = () => {
             name: taller.talleres.name,
             sala: taller.talleres.location,
             color: taller.talleres.color,
-            canDelete: false,
+            canDelete: true,
           };
         }
       }
@@ -194,7 +187,7 @@ const Schedule = () => {
           name: 'Gimnasio',
           sala: gym.horarios_gym.bloque,
           color: 'bg-primary',
-          canDelete: false,
+          canDelete: true,
         };
       }
     }
@@ -218,61 +211,25 @@ const Schedule = () => {
   };
 
   const handleAddRamo = async () => {
-    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
-      toast.error('Completa todos los campos obligatorios');
-      return;
-    }
-
-    const bloqueInicio = parseInt(formData.bloque_inicio);
-    const bloqueFin = parseInt(formData.bloque_fin);
-    const bloquePar = `${bloqueInicio}-${bloqueFin}`;
-
-    // Check conflicts
-    const existing = getEventForSlot(formData.dia, bloquePar);
-    if (existing) {
-      toast.error(`Conflicto detectado en ${formData.dia} bloque ${bloquePar}`);
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from('ramos_personales').insert({
-        user_id: user.id,
-        nombre_ramo: formData.nombre_ramo,
-        sala: formData.sala || '',
-        dia: formData.dia,
-        bloque_inicio: bloqueInicio,
-        bloque_fin: bloqueFin,
-        color: formData.color,
-      });
-
-      if (error) throw error;
-
-      toast.success('Ramo agregado exitosamente');
-      setShowAddDialog(false);
-      setFormData({
-        nombre_ramo: '',
-        sala: '',
-        dia: '',
-        bloque_inicio: '',
-        bloque_fin: '',
-        color: 'bg-purple-500',
-      });
-      fetchScheduleData();
-    } catch (error) {
-      console.error('Error adding ramo:', error);
-      toast.error('Error al agregar ramo');
-    }
+    toast.error('Funcionalidad de ramos académicos próximamente');
+    setShowAddDialog(false);
   };
 
-  const handleDeleteRamo = async (ramoId: string) => {
+  const handleDelete = async (event: ScheduleEvent) => {
     try {
-      const { error } = await supabase.from('ramos_personales').delete().eq('id', ramoId);
-      if (error) throw error;
-      toast.success('Ramo eliminado');
+      if (event.type === 'taller') {
+        const { error } = await supabase.from('inscripciones_talleres').delete().eq('id', event.id);
+        if (error) throw error;
+        toast.success('Taller eliminado del horario');
+      } else if (event.type === 'gym') {
+        const { error } = await supabase.from('reservas_gym').delete().eq('id', event.id);
+        if (error) throw error;
+        toast.success('Reserva de gimnasio cancelada');
+      }
       fetchScheduleData();
     } catch (error) {
-      console.error('Error deleting ramo:', error);
-      toast.error('Error al eliminar ramo');
+      console.error('Error deleting:', error);
+      toast.error('Error al eliminar');
     }
   };
 
@@ -351,7 +308,7 @@ const Schedule = () => {
                             {event.sala && <div className="text-xs opacity-90">{event.sala}</div>}
                             {editMode && event.canDelete && (
                               <button
-                                onClick={() => handleDeleteRamo(event.id)}
+                                onClick={() => handleDelete(event)}
                                 className="absolute top-1 right-1 bg-destructive rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                               >
                                 <Trash2 className="h-3 w-3" />
