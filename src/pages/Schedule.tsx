@@ -80,6 +80,9 @@ const Schedule = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: string } | null>(null);
   
+  // Backup states para cancelar cambios
+  const [backupRamos, setBackupRamos] = useState<RamoPersonal[]>([]);
+  
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -287,6 +290,55 @@ const Schedule = () => {
     }
   };
 
+  const handleEnterEditMode = () => {
+    // Crear backup del estado actual
+    setBackupRamos(JSON.parse(JSON.stringify(ramos)));
+    setEditMode(true);
+  };
+
+  const handleSaveChanges = () => {
+    setEditMode(false);
+    toast.success('Cambios guardados');
+  };
+
+  const handleCancelEdit = async () => {
+    if (!user) return;
+
+    try {
+      // Obtener IDs actuales y del backup
+      const currentRamoIds = new Set(ramos.map(r => r.id));
+      const backupRamoIds = new Set(backupRamos.map(r => r.id));
+
+      // Eliminar ramos que fueron agregados durante la edición
+      const ramosToDelete = ramos.filter(r => !backupRamoIds.has(r.id));
+      for (const ramo of ramosToDelete) {
+        await supabase.from('ramos_personales').delete().eq('id', ramo.id);
+      }
+
+      // Re-agregar ramos que fueron eliminados durante la edición
+      const ramosToRestore = backupRamos.filter(r => !currentRamoIds.has(r.id));
+      for (const ramo of ramosToRestore) {
+        await supabase.from('ramos_personales').insert({
+          user_id: user.id,
+          nombre_ramo: ramo.nombre_ramo,
+          sala: ramo.sala,
+          dia: ramo.dia,
+          bloque_inicio: ramo.bloque_inicio,
+          bloque_fin: ramo.bloque_fin,
+          color: ramo.color,
+        });
+      }
+
+      // Refrescar datos
+      await fetchScheduleData();
+      setEditMode(false);
+      toast.info('Cambios descartados');
+    } catch (error) {
+      console.error('Error canceling changes:', error);
+      toast.error('Error al cancelar cambios');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -314,10 +366,7 @@ const Schedule = () => {
               {editMode ? (
                 <>
                   <Button
-                    onClick={() => {
-                      setEditMode(false);
-                      toast.info('Modo edición desactivado');
-                    }}
+                    onClick={handleCancelEdit}
                     variant="outline"
                     className="gap-2 bg-white/10 hover:bg-white/20 border-white/30"
                   >
@@ -325,10 +374,7 @@ const Schedule = () => {
                     Cancelar
                   </Button>
                   <Button
-                    onClick={() => {
-                      setEditMode(false);
-                      toast.success('Cambios guardados');
-                    }}
+                    onClick={handleSaveChanges}
                     variant="secondary"
                     className="gap-2"
                   >
@@ -338,7 +384,7 @@ const Schedule = () => {
                 </>
               ) : (
                 <Button
-                  onClick={() => setEditMode(true)}
+                  onClick={handleEnterEditMode}
                   variant="default"
                   className="gap-2 bg-white text-primary hover:bg-white/90"
                 >
