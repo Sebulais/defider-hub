@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Plus, Edit2, Save, Trash2 } from 'lucide-react';
+import { Calendar, Plus, Edit2, Save, Trash2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,10 +79,6 @@ const Schedule = () => {
   const [editMode, setEditMode] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ dia: string; bloque: string } | null>(null);
-  
-  // Backup state for cancel functionality
-  const [backupTalleres, setBackupTalleres] = useState<TallerInscription[]>([]);
-  const [backupGymReservations, setBackupGymReservations] = useState<GymReservation[]>([]);
   
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -204,7 +200,7 @@ const Schedule = () => {
       }
     }
   
-    // Check ramos (convertir bloque_inicio-bloque_fin a formato par)
+    // Check ramos
     for (const ramo of ramos) {
       const ramoPar = `${ramo.bloque_inicio}-${ramo.bloque_fin}`;
       if (ramo.dia === dia && ramoPar === bloquePar) {
@@ -223,7 +219,7 @@ const Schedule = () => {
   };
 
   const handleAddRamo = async () => {
-        if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
+    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
       toast.error('Completa todos los campos obligatorios');
       return;
     }
@@ -267,26 +263,6 @@ const Schedule = () => {
       console.error('Error adding ramo:', error);
       toast.error('Error al agregar ramo');
     }
-  };
-
-  const handleEnterEditMode = () => {
-    // Backup current state
-    setBackupTalleres([...talleres]);
-    setBackupGymReservations([...gymReservations]);
-    setEditMode(true);
-  };
-
-  const handleSaveChanges = () => {
-    setEditMode(false);
-    toast.success('Cambios guardados');
-  };
-
-  const handleCancelEdit = () => {
-    // Restore backup state
-    setTalleres(backupTalleres);
-    setGymReservations(backupGymReservations);
-    setEditMode(false);
-    toast.info('Cambios descartados');
   };
 
   const handleDelete = async (event: ScheduleEvent) => {
@@ -338,24 +314,31 @@ const Schedule = () => {
               {editMode ? (
                 <>
                   <Button
-                    onClick={handleCancelEdit}
-                    variant="default"
-                    className="gap-2"
+                    onClick={() => {
+                      setEditMode(false);
+                      toast.info('Modo edición desactivado');
+                    }}
+                    variant="outline"
+                    className="gap-2 bg-white/10 hover:bg-white/20 border-white/30"
                   >
+                    <X className="h-4 w-4" />
                     Cancelar
                   </Button>
                   <Button
-                    onClick={handleSaveChanges}
+                    onClick={() => {
+                      setEditMode(false);
+                      toast.success('Cambios guardados');
+                    }}
                     variant="secondary"
                     className="gap-2"
                   >
                     <Save className="h-4 w-4" />
-                    Guardar Cambios
+                    Guardar
                   </Button>
                 </>
               ) : (
                 <Button
-                  onClick={handleEnterEditMode}
+                  onClick={() => setEditMode(true)}
                   variant="default"
                   className="gap-2 bg-white text-primary hover:bg-white/90"
                 >
@@ -409,7 +392,7 @@ const Schedule = () => {
                         ) : editMode ? (
                           <button
                             onClick={() => {
-                              setSelectedSlot({ dia, bloque: num }); // num ya es '1-2', '3-4', etc.
+                              setSelectedSlot({ dia, bloque: num });
                               const [inicio, fin] = num.split('-');
                               setFormData({ 
                                 ...formData, 
