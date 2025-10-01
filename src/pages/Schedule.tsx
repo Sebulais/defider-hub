@@ -91,8 +91,7 @@ const Schedule = () => {
     nombre_ramo: '',
     sala: '',
     dia: '',
-    bloque_inicio: '',
-    bloque_fin: '',
+    bloque: '', // Solo un campo para el par de bloques
     color: 'bg-purple-500',
   });
 
@@ -222,19 +221,17 @@ const Schedule = () => {
   };
 
   const handleAddRamo = async () => {
-    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque_inicio) {
+    if (!user || !formData.nombre_ramo || !formData.dia || !formData.bloque) {
       toast.error('Completa todos los campos obligatorios');
       return;
     }
 
-    const bloqueInicio = parseInt(formData.bloque_inicio);
-    const bloqueFin = parseInt(formData.bloque_fin);
-    const bloquePar = `${bloqueInicio}-${bloqueFin}`;
+    const [bloqueInicio, bloqueFin] = formData.bloque.split('-').map(Number);
 
     // Check conflicts
-    const existing = getEventForSlot(formData.dia, bloquePar);
+    const existing = getEventForSlot(formData.dia, formData.bloque);
     if (existing) {
-      toast.error(`Conflicto detectado en ${formData.dia} bloque ${bloquePar}`);
+      toast.error(`Conflicto detectado en ${formData.dia} bloque ${formData.bloque}`);
       return;
     }
 
@@ -257,8 +254,7 @@ const Schedule = () => {
         nombre_ramo: '',
         sala: '',
         dia: '',
-        bloque_inicio: '',
-        bloque_fin: '',
+        bloque: '',
         color: 'bg-purple-500',
       });
       fetchScheduleData();
@@ -439,12 +435,10 @@ const Schedule = () => {
                           <button
                             onClick={() => {
                               setSelectedSlot({ dia, bloque: num });
-                              const [inicio, fin] = num.split('-');
                               setFormData({ 
                                 ...formData, 
                                 dia, 
-                                bloque_inicio: inicio, 
-                                bloque_fin: fin 
+                                bloque: num
                               });
                               setShowAddDialog(true);
                             }}
@@ -518,32 +512,20 @@ const Schedule = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="bloque_inicio">Bloque Inicio *</Label>
-                <Select value={formData.bloque_inicio} onValueChange={(v) => setFormData({ ...formData, bloque_inicio: v, bloque_fin: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Inicio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2">Bloque 1-2</SelectItem>
-                    <SelectItem value="4">Bloque 3-4</SelectItem>
-                    <SelectItem value="6">Bloque 5-6</SelectItem>
-                    <SelectItem value="8">Bloque 7-8</SelectItem>
-                    <SelectItem value="10">Bloque 9-10</SelectItem>
-                    <SelectItem value="12">Bloque 11-12</SelectItem>
-                    <SelectItem value="14">Bloque 13-14</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="bloque_fin">Bloque Fin *</Label>
-                <Input 
-                  value={formData.bloque_fin} 
-                  disabled 
-                  className="bg-muted"
-                />
-              </div>
+            <div>
+              <Label htmlFor="bloque">Bloque *</Label>
+              <Select value={formData.bloque} onValueChange={(v) => setFormData({ ...formData, bloque: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona bloque" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BLOQUES.map(b => (
+                    <SelectItem key={b.num} value={b.num}>
+                      Bloque {b.num} ({b.hora})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="color">Color</Label>
