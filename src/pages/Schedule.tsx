@@ -286,7 +286,7 @@ const Schedule = () => {
                 <>
                   <Button
                     onClick={handleCancelEdit}
-                    variant="outline"
+                    variant="default"
                     className="gap-2"
                   >
                     Cancelar
