@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Clock, Users, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 interface HorarioGym {
   id: string;
@@ -17,6 +15,19 @@ interface HorarioGym {
   cupos_totales: number;
   cupos_ocupados: number;
 }
+
+// Definición de bloques horarios
+const BLOQUES_HORARIOS = [
+  { bloque: 'Bloque 1-2', hora: '08:15-09:25' },
+  { bloque: 'Bloque 3-4', hora: '09:40-10:50' },
+  { bloque: 'Bloque 5-6', hora: '11:05-12:15' },
+  { bloque: 'Bloque 7-8', hora: '12:30-13:40' },
+  { bloque: 'Bloque 9-10', hora: '14:40-15:50' },
+  { bloque: 'Bloque 11-12', hora: '16:05-17:15' },
+  { bloque: 'Bloque 13-14', hora: '17:30-18:40' },
+];
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 const GymBooking = () => {
   const [horarios, setHorarios] = useState<HorarioGym[]>([]);
@@ -166,29 +177,9 @@ const GymBooking = () => {
     }
   };
 
-  const getCuposColor = (disponibles: number, totales: number) => {
-    const porcentaje = (disponibles / totales) * 100;
-    if (porcentaje > 50) return 'text-secondary';
-    if (porcentaje > 25) return 'text-accent';
-    return 'text-destructive';
+  const getHorarioForDiaBloque = (dia: string, bloque: string) => {
+    return horarios.find(h => h.dia === dia && h.bloque === bloque);
   };
-
-  const getCuposBadgeVariant = (disponibles: number, totales: number): "default" | "secondary" | "destructive" => {
-    const porcentaje = (disponibles / totales) * 100;
-    if (porcentaje > 50) return 'secondary';
-    if (porcentaje > 25) return 'default';
-    return 'destructive';
-  };
-
-  const groupedHorarios = horarios.reduce((acc, horario) => {
-    if (!acc[horario.dia]) {
-      acc[horario.dia] = [];
-    }
-    acc[horario.dia].push(horario);
-    return acc;
-  }, {} as Record<string, HorarioGym[]>);
-
-  const diasOrden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   if (loading) {
     return (
@@ -212,98 +203,122 @@ const GymBooking = () => {
       </div>
 
       <div className="container mx-auto px-4 py-12">
-        {/* Schedules by Day */}
-        <div className="space-y-8">
-          {diasOrden.map((dia) => {
-            const horariosDelDia = groupedHorarios[dia];
-            if (!horariosDelDia || horariosDelDia.length === 0) return null;
-
-            return (
-              <div key={dia}>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Calendar className="h-6 w-6 text-primary" />
-                  {dia}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {horariosDelDia.map((horario) => {
-                    const cuposDisponibles = horario.cupos_totales - horario.cupos_ocupados;
-                    const isReserved = userReservations.has(horario.id);
-                    const isFull = cuposDisponibles <= 0;
-
-                    return (
-                      <Card key={horario.id} className="transition-sport hover:shadow-sport">
-                        <CardHeader>
-                          <CardTitle className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                              <Clock className="h-5 w-5 text-primary" />
-                              {horario.bloque}
-                            </span>
-                            <Badge variant={getCuposBadgeVariant(cuposDisponibles, horario.cupos_totales)}>
-                              {cuposDisponibles}/{horario.cupos_totales}
-                            </Badge>
-                          </CardTitle>
-                          <CardDescription>
-                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                              <Users className={`h-4 w-4 ${getCuposColor(cuposDisponibles, horario.cupos_totales)}`} />
-                              <span className={`text-sm font-medium ${getCuposColor(cuposDisponibles, horario.cupos_totales)}`}>
-                                {cuposDisponibles > 0 
-                                  ? `${cuposDisponibles} cupos disponibles`
-                                  : 'Sin cupos disponibles'}
-                              </span>
+        {/* Tabla de Horarios */}
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="p-4 text-left font-semibold border-b border-r">Horario</th>
+                  {DIAS_SEMANA.map(dia => (
+                    <th key={dia} className="p-4 text-center font-semibold border-b border-r min-w-[140px]">
+                      {dia}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BLOQUES_HORARIOS.map(({ bloque, hora }) => (
+                  <tr key={bloque} className="hover:bg-muted/20">
+                    <td className="p-4 font-medium border-b border-r bg-muted/30">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm">{bloque}</span>
+                        <span className="text-xs text-muted-foreground">{hora}</span>
+                      </div>
+                    </td>
+                    {DIAS_SEMANA.map(dia => {
+                      const horario = getHorarioForDiaBloque(dia, bloque);
+                      
+                      if (!horario) {
+                        return (
+                          <td key={`${dia}-${bloque}`} className="p-2 border-b border-r">
+                            <div className="flex flex-col items-center justify-center h-20 text-muted-foreground">
+                              <span className="text-xs">No disponible</span>
                             </div>
+                          </td>
+                        );
+                      }
 
+                      const cuposDisponibles = horario.cupos_totales - horario.cupos_ocupados;
+                      const isReserved = userReservations.has(horario.id);
+                      const isFull = cuposDisponibles <= 0;
+                      const isProcessing = reserving === horario.id;
+
+                      return (
+                        <td key={`${dia}-${bloque}`} className="p-2 border-b border-r">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            {/* Botón de registro/cancelación */}
                             {isReserved ? (
-                              <Button
+                              <button
                                 onClick={() => handleCancelReservation(horario.id)}
-                                disabled={reserving === horario.id}
-                                variant="destructive"
-                                className="w-full"
+                                disabled={isProcessing}
+                                className="w-full px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 bg-yellow-500 text-white hover:bg-red-600 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed group"
                               >
-                                {reserving === horario.id ? 'Cancelando...' : 'Cancelar Reserva'}
-                              </Button>
+                                <span className="group-hover:hidden">Registrado</span>
+                                <span className="hidden group-hover:inline">
+                                  {isProcessing ? 'Cancelando...' : 'Cancelar'}
+                                </span>
+                              </button>
                             ) : (
-                              <Button
+                              <button
                                 onClick={() => handleReservation(horario.id)}
-                                disabled={isFull || reserving === horario.id}
-                                className="w-full"
+                                disabled={isFull || isProcessing}
+                                className={`w-full px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group ${
+                                  isFull 
+                                    ? 'bg-gray-400 text-white cursor-not-allowed' 
+                                    : 'bg-green-600 text-white hover:bg-green-400 hover:shadow-lg'
+                                }`}
                               >
-                                {reserving === horario.id 
-                                  ? 'Reservando...' 
-                                  : isFull 
-                                  ? 'Sin cupos' 
-                                  : 'Reservar'}
-                              </Button>
+                                <span className="group-hover:hidden">
+                                  {isProcessing ? 'Registrando...' : isFull ? 'Sin cupos' : `${cuposDisponibles}/${horario.cupos_totales}`}
+                                </span>
+                                <span className="hidden group-hover:inline">
+                                  {isProcessing ? 'Registrando...' : isFull ? 'Sin cupos' : 'Registrarse'}
+                                </span>
+                              </button>
                             )}
                           </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Leyenda */}
+        <div className="mt-6 flex flex-wrap gap-4 justify-center items-center text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-green-600"></div>
+            <span>Disponible (muestra cupos)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-yellow-500"></div>
+            <span>Tu reserva</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gray-400"></div>
+            <span>Sin cupos</span>
+          </div>
         </div>
 
         {/* Important Information */}
-        <Card className="mt-12 border-accent/20 bg-accent/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-accent">
+        <Card className="mt-8 border-accent/20 bg-accent/5">
+          <div className="p-6">
+            <h3 className="flex items-center gap-2 text-accent font-semibold mb-3">
               <AlertCircle className="h-5 w-5" />
               Información Importante
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>• Las reservas se actualizan en tiempo real</p>
-            <p>• Puedes cancelar tu reserva hasta 1 hora antes del horario</p>
-            <p>• Máximo 3 reservas activas por persona</p>
-            <p>• Recuerda llegar 10 minutos antes de tu horario reservado</p>
-          </CardContent>
+            </h3>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>• Las reservas se actualizan en tiempo real</p>
+              <p>• Puedes cancelar tu reserva hasta 1 hora antes del horario</p>
+              <p>• Máximo 3 reservas activas por persona</p>
+              <p>• Recuerda llegar 10 minutos antes de tu horario reservado</p>
+              <p>• Pasa el mouse sobre "Registrado" para cancelar tu reserva</p>
+            </div>
+          </div>
         </Card>
       </div>
     </div>
