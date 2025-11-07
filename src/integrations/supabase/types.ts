@@ -76,6 +76,39 @@ export type Database = {
           },
         ]
       }
+      ramos_personales: {
+        Row: {
+          bloque_ramo: string
+          color: string | null
+          created_at: string | null
+          dia: string
+          id: string
+          nombre_ramo: string
+          sala: string | null
+          user_id: string
+        }
+        Insert: {
+          bloque_ramo: string
+          color?: string | null
+          created_at?: string | null
+          dia: string
+          id?: string
+          nombre_ramo: string
+          sala?: string | null
+          user_id: string
+        }
+        Update: {
+          bloque_ramo?: string
+          color?: string | null
+          created_at?: string | null
+          dia?: string
+          id?: string
+          nombre_ramo?: string
+          sala?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       reservas_gym: {
         Row: {
           created_at: string
@@ -108,55 +141,49 @@ export type Database = {
       talleres: {
         Row: {
           available: boolean | null
+          campus: string | null
           capacity: number
           category: string
           color: string | null
           created_at: string
           description: string | null
-          duration: string
           enrolled: number
           id: string
           instructor: string
-          level: string
           location: string
           name: string
-          price: string
           rating: number | null
           schedule: string
         }
         Insert: {
           available?: boolean | null
+          campus?: string | null
           capacity?: number
           category: string
           color?: string | null
           created_at?: string
           description?: string | null
-          duration: string
           enrolled?: number
           id?: string
           instructor: string
-          level: string
           location: string
           name: string
-          price: string
           rating?: number | null
           schedule: string
         }
         Update: {
           available?: boolean | null
+          campus?: string | null
           capacity?: number
           category?: string
           color?: string | null
           created_at?: string
           description?: string | null
-          duration?: string
           enrolled?: number
           id?: string
           instructor?: string
-          level?: string
           location?: string
           name?: string
-          price?: string
           rating?: number | null
           schedule?: string
         }
