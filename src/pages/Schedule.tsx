@@ -220,6 +220,14 @@ const Schedule: React.FC = () => {
       toast.error("Completa todos los campos obligatorios");
       return;
     }
+
+    // Check conflicts
+    const existing = getEventForSlot(formData.dia, formData.bloque_ramo);
+    if (existing) {
+      toast.error(`Conflicto detectado en ${formData.dia} bloque ${formData.bloque_ramo} con ${existing.type === "ramo" ? existing.nombre_ramo : existing.type === "taller" ? existing.talleres.name : "Gimnasio"}`);
+      return;
+    }
+
     try {
       const { error } = await supabase.from("ramos_personales").insert({
         user_id: user.id,
@@ -237,7 +245,7 @@ const Schedule: React.FC = () => {
       setFormData({ nombre_ramo: "", sala: "", dia: "", bloque_ramo: "", color: "bg-purple-500" });
       fetchScheduleData();
     } catch {
-      toast.error("Error al agregar ramo");
+      toast.error("Error al agregar Ramo");
     }
   };
 
@@ -341,14 +349,14 @@ const Schedule: React.FC = () => {
             className="gap-2 bg-white text-primary hover:bg-white/90"
           >
             {editMode ? <X className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
-            {editMode ? "Salir del modo edición" : "Editar Horario"}
+            {editMode ? "Salir del modo edición" : "Agregar Ramos"}
           </Button>
         </div>
       </div>
 
       <div className="container mx-auto px-4">
-        <Card className="overflow-x-auto">
-          <table className="w-full border-collapse">
+        <Card className="overflow-x-auto mx-auto mt-10 mb-10 max-w-5xl px-6">
+          <table className="w-full border-collapse mt-3 mb-3">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="p-3 text-left font-semibold">Bloque</th>
@@ -454,7 +462,7 @@ const Schedule: React.FC = () => {
             <Label>Bloque *</Label>
             <Select
               value={formData.bloque_ramo}
-              onValueChange={(v) => setFormData({ ...formData, bloque: v })}
+              onValueChange={(v) => setFormData({ ...formData, bloque_ramo: v })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecciona bloque" />
