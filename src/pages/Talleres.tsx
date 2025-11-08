@@ -399,24 +399,33 @@ const Talleres = () => {
                         </div>
 
                         <div className="pt-2">
-                          <Button 
-                            variant={estaInscrito ? "outline" : (taller.available ? "default" : "outline")}
-                            size="sm" 
-                            className="w-full"
-                            disabled={(!taller.available && !estaInscrito) || inscribing === taller.id}
-                            onClick={() => {
-                              if (estaInscrito) {
-                                openConfirmDialog(taller.id, taller.name, 'desinscribir');
-                              } else if (taller.available) {
-                                openConfirmDialog(taller.id, taller.name, 'inscribir');
-                              }
-                            }}
-                          >
-                            {inscribing === taller.id ? "Procesando..." : 
-                             estaInscrito ? "Desinscribirse" :
-                             taller.available ? "Inscribirse" : "Cupos Agotados"}
-                          </Button>
+                          {taller.enrolled >= taller.capacity && !misInscripciones.has(taller.id) ? (
+                            <Button variant="outline" size="sm" className="w-full" disabled>
+                              Cupos Agotados
+                            </Button>
+                          ) : (
+                            <Button
+                              variant={estaInscrito ? "outline" : "default"}
+                              size="sm"
+                              className="w-full"
+                              disabled={inscribing === taller.id}
+                              onClick={() => {
+                                if (estaInscrito) {
+                                  openConfirmDialog(taller.id, taller.name, "desinscribir");
+                                } else {
+                                  openConfirmDialog(taller.id, taller.name, "inscribir");
+                                }
+                              }}
+                            >
+                              {inscribing === taller.id
+                                ? "Procesando..."
+                                : estaInscrito
+                                ? "Desinscribirse"
+                                : "Inscribirse"}
+                            </Button>
+                          )}
                         </div>
+
                       </div>
                     </div>
                   </Card>
