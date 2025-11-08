@@ -123,47 +123,145 @@ const Talleres = () => {
 
   const handleInscription = async (tallerId: string) => {
     if (!user) return;
-
     setInscribing(tallerId);
+
     try {
+      // 1️⃣ Obtener el taller seleccionado
+      const { data: taller, error: tallerError } = await supabase
+        .from('talleres')
+        .select('id, name, schedule')
+        .eq('id', tallerId)
+        .single();
+
+      if (tallerError || !taller) throw tallerError;
+
+      // 2️⃣ Extraer días y bloques del taller
+      // Ejemplo: "Mar-Jue Bloque 5-6"
+      const scheduleMatch = taller.schedule.match(/([A-Za-zÁÉÍÓÚñÑ\-]+)\s*Bloque\s*(\d+)-(\d+)/i);
+      if (!scheduleMatch) {
+        console.warn('Formato de horario no reconocido:', taller.schedule);
+      }
+
+      // Días pueden venir separados por "-", ej: "Mar-Jue"
+      const diasTaller = scheduleMatch
+        ? scheduleMatch[1]
+            .split('-')
+            .map((d) => d.trim().toLowerCase())
+        : [];
+      const bloqueInicio = scheduleMatch ? parseInt(scheduleMatch[2]) : null;
+      const bloqueFin = scheduleMatch ? parseInt(scheduleMatch[3]) : null;
+
+      // Mapeo abreviado a nombre completo si los ramos usan "Lunes", "Martes", etc.
+      const mapDias: Record<string, string> = {
+        lun: 'lunes',
+        mar: 'martes',
+        mie: 'miércoles',
+        mié: 'miércoles',
+        jue: 'jueves',
+        vie: 'viernes',
+        sab: 'sábado',
+        sáb: 'sábado',
+        dom: 'domingo',
+      };
+      const diasNormalizados = diasTaller.map((d) => mapDias[d.slice(0, 3)] || d);
+
+      // 3️⃣ Consultar ramos personales
+      const { data: ramos, error: ramosError } = await supabase
+        .from('ramos_personales')
+        .select('dia, bloque_ramo')
+        .eq('user_id', user.id);
+
+      if (ramosError) throw ramosError;
+
+      // 4️⃣ Consultar reservas de gym con su horario
+      const { data: reservas, error: reservasError } = await supabase
+        .from('reservas_gym')
+        .select('horarios_gym:horario_gym_id (dia, bloque)')
+        .eq('user_id', user.id);
+
+      if (reservasError) throw reservasError;
+
+      const conflictos: { tipo: string; dia: string; bloque: string }[] = [];
+
+      // 5️⃣ Verificar ramos personales
+      for (const r of ramos || []) {
+        const diaRamo = r.dia.toLowerCase();
+        if (diasNormalizados.includes(diaRamo)) {
+          const matchBloque = r.bloque_ramo.match(/(\d+)-?(\d+)?/);
+          if (matchBloque && bloqueInicio && bloqueFin) {
+            const bInicio = parseInt(matchBloque[1]);
+            const bFin = matchBloque[2] ? parseInt(matchBloque[2]) : bInicio;
+            const hayCruce = !(bloqueFin < bInicio || bloqueInicio > bFin);
+            if (hayCruce) {
+              conflictos.push({ tipo: 'ramo', dia: r.dia, bloque: r.bloque_ramo });
+            }
+          }
+        }
+      }
+
+      // 6️⃣ Verificar reservas de gimnasio
+      for (const r of reservas || []) {
+        const h = r.horarios_gym;
+        if (h && diasNormalizados.includes(h.dia.toLowerCase())) {
+          const matchBloque = h.bloque.match(/(\d+)-?(\d+)?/);
+          if (matchBloque && bloqueInicio && bloqueFin) {
+            const bInicio = parseInt(matchBloque[1]);
+            const bFin = matchBloque[2] ? parseInt(matchBloque[2]) : bInicio;
+            const hayCruce = !(bloqueFin < bInicio || bloqueInicio > bFin);
+            if (hayCruce) {
+              conflictos.push({ tipo: 'gym', dia: h.dia, bloque: h.bloque });
+            }
+          }
+        }
+      }
+
+      // 7️⃣ Si hay conflicto → mostrar toast y no inscribir
+      if (conflictos.length > 0) {
+        const conflicto = conflictos[0];
+        toast({
+          title: "Conflicto de horario",
+          description:
+            conflicto.tipo === 'ramo'
+              ? `Tienes un ramo personal el ${conflicto.dia} en el bloque ${conflicto.bloque}. No puedes inscribirte en este taller.`
+              : `Tienes una reserva de gimnasio el ${conflicto.dia} en el bloque ${conflicto.bloque}. No puedes inscribirte en este taller.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 8️⃣ Sin conflicto → inscribir normalmente
       const { error } = await supabase
         .from('inscripciones_talleres')
-        .insert([
-          {
-            user_id: user.id,
-            taller_id: tallerId
-          }
-        ]);
+        .insert([{ user_id: user.id, taller_id: tallerId }]);
 
       if (error) {
         if (error.code === '23505') {
           toast({
             title: "Ya inscrito",
             description: "Ya estás inscrito en este taller",
-            variant: "destructive"
+            variant: "destructive",
           });
-        } else {
-          throw error;
-        }
+        } else throw error;
       } else {
         toast({
           title: "¡Inscrito!",
-          description: "Te has inscrito exitosamente al taller"
+          description: "Te has inscrito exitosamente al taller",
         });
         await fetchMisInscripciones();
         await fetchTalleres();
       }
     } catch (error) {
-      console.error('Error inscribing:', error);
+      console.error("Error inscribing:", error);
       toast({
         title: "Error",
         description: "No se pudo completar la inscripción",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setInscribing(null);
     }
   };
+
 
   const handleDesinscription = async (tallerId: string) => {
     if (!user) return;

@@ -125,6 +125,88 @@ const GymBooking = () => {
     setReserving(horarioId);
 
     try {
+      // 1️⃣ Obtener el horario seleccionado del gym
+      const { data: horarioGym, error: horarioError } = await supabase
+        .from('horarios_gym')
+        .select('id, dia, bloque')
+        .eq('id', horarioId)
+        .single();
+
+      if (horarioError || !horarioGym) throw horarioError;
+
+      const dia = horarioGym.dia.toLowerCase();
+      const bloqueGym = horarioGym.bloque.match(/(\d+)-?(\d+)?/);
+      const bloqueInicio = bloqueGym ? parseInt(bloqueGym[1]) : null;
+      const bloqueFin = bloqueGym && bloqueGym[2] ? parseInt(bloqueGym[2]) : bloqueInicio;
+
+      // 2️⃣ Traer ramos personales del usuario
+      const { data: ramos, error: ramosError } = await supabase
+        .from('ramos_personales')
+        .select('dia, bloque_ramo')
+        .eq('user_id', user.id);
+
+      if (ramosError) throw ramosError;
+
+      // 3️⃣ Traer talleres inscritos del usuario con su horario
+      const { data: talleres, error: talleresError } = await supabase
+        .from('inscripciones_talleres')
+        .select('talleres(schedule)')
+        .eq('user_id', user.id);
+
+      if (talleresError) throw talleresError;
+
+      // 4️⃣ Parsear talleres → obtener sus días y bloques
+      const conflictos: { tipo: string; dia: string; bloque: string }[] = [];
+
+      for (const r of ramos || []) {
+        const diaRamo = r.dia.toLowerCase();
+        if (diaRamo === dia) {
+          const match = r.bloque_ramo.match(/(\d+)-?(\d+)?/);
+          if (match && bloqueInicio && bloqueFin) {
+            const bInicio = parseInt(match[1]);
+            const bFin = match[2] ? parseInt(match[2]) : bInicio;
+            const hayCruce = !(bloqueFin < bInicio || bloqueInicio > bFin);
+            if (hayCruce) conflictos.push({ tipo: 'ramo', dia: r.dia, bloque: r.bloque_ramo });
+          }
+        }
+      }
+
+      for (const t of talleres || []) {
+        const schedule = t.talleres?.schedule || '';
+        const match = schedule.match(/([A-Za-zÁÉÍÓÚñÑ\-]+)\s*Bloque\s*(\d+)-(\d+)/i);
+        if (match) {
+          const diasTaller = match[1].split('-').map((d) => d.trim().toLowerCase());
+          const bloqueTallerInicio = parseInt(match[2]);
+          const bloqueTallerFin = parseInt(match[3]);
+          const mapDias: Record<string, string> = {
+            lun: 'lunes',
+            mar: 'martes',
+            mie: 'miércoles',
+            mié: 'miércoles',
+            jue: 'jueves',
+            vie: 'viernes',
+            sab: 'sábado',
+            sáb: 'sábado',
+            dom: 'domingo',
+          };
+          const diasNormalizados = diasTaller.map((d) => mapDias[d.slice(0, 3)] || d);
+          if (diasNormalizados.includes(dia)) {
+            const hayCruce = !(bloqueFin! < bloqueTallerInicio || bloqueInicio! > bloqueTallerFin);
+            if (hayCruce) conflictos.push({ tipo: 'taller', dia: horarioGym.dia, bloque: horarioGym.bloque });
+          }
+        }
+      }
+
+      // 5️⃣ Si hay conflicto → avisar y no permitir reservar
+      if (conflictos.length > 0) {
+        const conflicto = conflictos[0];
+        const tipo = conflicto.tipo === 'ramo' ? 'ramo personal' : 'taller';
+        toast.error(`No puedes reservar este horario porque tienes un ${tipo} el ${conflicto.dia} en el bloque ${conflicto.bloque}.`);
+        setReserving(null);
+        return;
+      }
+
+      // 6️⃣ Si no hay conflicto → proceder con reserva normal
       const { error } = await supabase
         .from('reservas_gym')
         .insert({
@@ -151,6 +233,7 @@ const GymBooking = () => {
       setReserving(null);
     }
   };
+
 
   const handleCancelReservation = async (horarioId: string) => {
     if (!user) return;
