@@ -98,13 +98,13 @@ const Footer = () => {
             <div className="pt-4">
               <h5 className="text-sm font-semibold text-foreground mb-3">Síguenos</h5>
               <div className="flex space-x-3">
-                <a href="#" className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
+                <a href="https://www.facebook.com/defiderusm" className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
                   <Facebook className="w-4 h-4 text-white" />
                 </a>
-                <a href="#" className="w-8 h-8 gradient-secondary rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
+                <a href="https://www.instagram.com/defider_usm" className="w-8 h-8 gradient-secondary rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
                   <Instagram className="w-4 h-4 text-white" />
                 </a>
-                <a href="#" className="w-8 h-8 gradient-accent rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
+                <a href="https://x.com/defiderusm" className="w-8 h-8 gradient-accent rounded-lg flex items-center justify-center hover:shadow-sport transition-all">
                   <Twitter className="w-4 h-4 text-white" />
                 </a>
               </div>
