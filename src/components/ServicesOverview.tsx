@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+mport { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Users, 
@@ -24,14 +24,14 @@ const ServicesOverview = () => {
     {
       icon: Trophy,
       title: "Reserva de Gimnasio",
-      description: "Reserva espacios en nuestros gimnasios equipados. Sistema en línea con horarios extendidos y equipamiento completo.",
+      description: "Reserva espacios en nuestros gimnasios equipados. Sistema en línea con horarios extendidos.",
       color: "gradient-secondary",
       href: "/gym"
     },
     {
       icon: Calendar,
       title: "Horario Personal",
-      description: "Gestiona todos tus talleres, reservas y ramos académicos desde un solo lugar. Sincronización automática y recordatorios.",
+      description: "Gestiona tus talleres, reservas y ramos académicos. Visualiza todo tu horario en un solo lugar.",
       color: "gradient-accent",
       href: "/schedule"
     }
@@ -52,22 +52,22 @@ const ServicesOverview = () => {
           <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Todo en un Solo Lugar
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Gestiona tu vida deportiva universitaria de forma simple y eficiente
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
           {services.map((service, index) => {
             const Icon = service.icon;
             return (
               <Card 
                 key={index} 
-                className="card-energy relative overflow-hidden group cursor-pointer"
+                className="relative overflow-hidden group cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-2"
                 onClick={() => handleNavigate(service.href)}
               >
-                <div className="absolute top-0 right-0 w-32 h-32 opacity-10">
-                  <div className={`w-full h-full ${service.color} rounded-full blur-xl`}></div>
+                <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
+                  <div className={`w-full h-full ${service.color} rounded-full blur-2xl`}></div>
                 </div>
                 
                 <div className="relative z-10 p-8">
@@ -79,41 +79,38 @@ const ServicesOverview = () => {
                     {service.title}
                   </h3>
                   
-                  <p className="text-muted-foreground mb-6 leading-relaxed">
+                  <p className="text-muted-foreground mb-6 leading-relaxed min-h-[72px]">
                     {service.description}
                   </p>
                   
-                  <Button 
-                    variant="ghost" 
-                    className="group/btn p-0 h-auto hover:bg-transparent"
-                  >
-                    <span className="text-primary font-semibold">Explorar</span>
-                    <ArrowRight className="w-4 h-4 ml-2 text-primary group-hover/btn:translate-x-1 transition-transform" />
-                  </Button>
+                  <div className="flex items-center text-primary font-semibold group-hover:gap-3 gap-2 transition-all">
+                    <span>Explorar</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </div>
                 </div>
               </Card>
             );
           })}
         </div>
 
-        {/* CTA Section */}
-        <div className="mt-16 text-center">
-          <div className="inline-flex flex-col gap-4 bg-card rounded-2xl p-8 shadow-sport">
-            <h3 className="text-2xl font-bold text-foreground">
+        {/* Simple CTA */}
+        <div className="text-center">
+          <Card className="inline-block p-8 shadow-sport">
+            <h3 className="text-2xl font-bold text-foreground mb-3">
               ¿Listo para comenzar?
             </h3>
-            <p className="text-muted-foreground max-w-md">
-              Únete a cientos de estudiantes que ya disfrutan de nuestra plataforma deportiva
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Únete a la comunidad deportiva DEFIDER
             </p>
             <Button 
               variant="energy" 
               size="lg"
               onClick={() => handleNavigate('/talleres')}
-              className="mt-2"
             >
               Comenzar Ahora
+              <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
-          </div>
+          </Card>
         </div>
       </div>
     </section>
